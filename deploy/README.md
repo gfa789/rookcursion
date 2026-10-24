@@ -9,16 +9,16 @@ account, and create `/etc/rookcursion/app.env` from `app.env.example`. Keep that
 root-owned, mode 0600. State lives at `/var/lib/rookcursion`, owned by `rookcursion`, mode
 0700. Install the service units from this directory into `/etc/systemd/system/`.
 
-Install Node.js 24 LTS from the official NodeSource repository; run `npm ci` and `npm run build`.
+Install Node.js 24 LTS from the official Node.js distribution, verifying its checksum; run `npm ci` and `npm run build`.
 
 Start the services with systemd and enable them at boot. Configure the server's
 Tailscale identity as `personal-apps`, authenticated to your own account. Then:
 
 ```sh
-tailscale serve --bg --https=8443 http://127.0.0.1:8891
+tailscale serve --bg --https=443 --set-path=/chess http://127.0.0.1:8891
 ```
 
-Rookcursion uses its existing `/chess/` URL on port 8443.
+Rookcursion is served at `/chess/` on the same HTTPS hostname as FiveK.
 Set `TAILSCALE_OWNER` to your Tailscale login; the application/bridge rejects
 missing and different identities, even if other tailnet members can reach it.
 Only Tailscale Serve should connect to these loopback ports. Do not share server
@@ -30,6 +30,3 @@ setup. Keep the original laptop data until migration is verified. Use SQLite's
 online backup API for a consistent migration snapshot rather than copying a live
 database file. Keep credentials and data out of Git and out of web roots.
 
-Garmin may challenge or reject cloud IP logins. Authenticate from the dashboard
-after credentials are configured privately. A successful home-network login
-does not guarantee a cloud login succeeds.
