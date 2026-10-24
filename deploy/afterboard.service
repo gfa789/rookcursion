@@ -1,0 +1,24 @@
+[Unit]
+Description=afterboard private dashboard
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=afterboard
+Group=afterboard
+WorkingDirectory=/opt/afterboard/app
+EnvironmentFile=/etc/afterboard/app.env
+ExecStart=/usr/bin/node server/index.js
+Restart=on-failure
+RestartSec=5
+StateDirectory=afterboard
+StateDirectoryMode=0700
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/afterboard
+
+[Install]
+WantedBy=multi-user.target
