@@ -1,4 +1,4 @@
-# Afterboard
+# Rookcursion
 
 A mobile-friendly chess study studio using React, Express, SQLite and Stockfish. Import Chess.com games, analyze positions, review moves and save engine-based explanations. No LLM API key is needed.
 

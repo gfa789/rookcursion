@@ -4,9 +4,9 @@ Run on Ubuntu 24.04 with persistent storage. Both application listeners bind onl
 to loopback. Tailscale Serve supplies HTTPS and authenticated identity. Never use
 Tailscale Funnel or open public application ports.
 
-Install this repository at `/opt/afterboard/app`, create the locked `afterboard` service
-account, and create `/etc/afterboard/app.env` from `app.env.example`. Keep that file
-root-owned, mode 0600. State lives at `/var/lib/afterboard`, owned by `afterboard`, mode
+Install this repository at `/opt/rookcursion/app`, create the locked `rookcursion` service
+account, and create `/etc/rookcursion/app.env` from `app.env.example`. Keep that file
+root-owned, mode 0600. State lives at `/var/lib/rookcursion`, owned by `rookcursion`, mode
 0700. Install the service units from this directory into `/etc/systemd/system/`.
 
 Install Node.js 24 LTS from the official NodeSource repository; run `npm ci` and `npm run build`.
@@ -18,7 +18,7 @@ Tailscale identity as `personal-apps`, authenticated to your own account. Then:
 tailscale serve --bg --https=8443 http://127.0.0.1:8891
 ```
 
-Afterboard uses its existing `/chess/` URL on port 8443.
+Rookcursion uses its existing `/chess/` URL on port 8443.
 Set `TAILSCALE_OWNER` to your Tailscale login; the application/bridge rejects
 missing and different identities, even if other tailnet members can reach it.
 Only Tailscale Serve should connect to these loopback ports. Do not share server

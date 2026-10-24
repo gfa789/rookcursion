@@ -15,7 +15,7 @@ async function unusedPort() {
 }
 
 test('private listener rejects missing/wrong identity and retains POST token protection',async()=>{
-  const data=await mkdtemp(path.join(tmpdir(),'afterboard-access-'));
+  const data=await mkdtemp(path.join(tmpdir(),'rookcursion-access-'));
   const port=await unusedPort(), privatePort=await unusedPort();
   const child=spawn(process.execPath,['server/index.js'],{
     env:{...process.env,DATA_DIR:data,PORT:String(port),PRIVATE_PORT:String(privatePort),

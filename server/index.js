@@ -54,7 +54,7 @@ app.get('/api/games',(req,res)=>{
 let syncing=null;
 async function chessFetch(url) {
   for(let attempt=0;attempt<3;attempt++) {
-    const response=await fetch(url,{headers:{'User-Agent':`AfterboardPersonalReview/1.0 (Chess.com user ${username})`,'Accept':'application/json'},signal:AbortSignal.timeout(25000)});
+    const response=await fetch(url,{headers:{'User-Agent':`RookcursionPersonalReview/1.0 (Chess.com user ${username})`,'Accept':'application/json'},signal:AbortSignal.timeout(25000)});
     if(response.ok)return response.json();
     if((response.status===429||response.status>=500)&&attempt<2){await new Promise(r=>setTimeout(r,1500*(attempt+1)));continue;}
     throw new Error(`Chess.com returned ${response.status}. Please try refreshing again shortly.`);
@@ -139,6 +139,6 @@ app.get(['/', '/index.html'],(req,res,next)=>{
 app.use(express.static(path.join(root,'dist'),{index:'index.html'}));
 app.use('/api',(req,res)=>res.status(404).json({error:'API route not found.'}));
 app.use((error,req,res,next)=>{console.error(error.message);res.status(500).json({error:error.message||'Something went wrong. Please retry.'});});
-const server=app.listen(port,'127.0.0.1',()=>console.log(`Afterboard listening on http://127.0.0.1:${port}`));
+const server=app.listen(port,'127.0.0.1',()=>console.log(`Rookcursion listening on http://127.0.0.1:${port}`));
 const privateServer=app.listen(privatePort,'127.0.0.1',()=>console.log(`Private Tailscale listener on 127.0.0.1:${privatePort}`));
 process.on('SIGTERM',()=>{engine.close();server.close();privateServer.close();});
