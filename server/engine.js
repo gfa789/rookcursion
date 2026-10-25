@@ -39,21 +39,25 @@ export class Engine {
       this.child.stdin.write(command+'\n');
     });
   }
-  evaluate(fen,depth=15) {
+  evaluate(fen,depth=15) {return this.search(fen,depth,1).then(lines=>lines[0]);}
+  evaluateMulti(fen,depth=14) {return this.search(fen,depth,2);}
+  search(fen,depth,multi) {
     const task=this.chain.then(async()=>{
       await this.start();
+      this.child.stdin.write('setoption name MultiPV value '+multi+'\n');
       this.child.stdin.write('position fen '+fen+'\n');
       const lines=await this.command('go depth '+depth,line=>line.startsWith('bestmove'),90000);
       const best=lines.at(-1).split(' ')[1];
-      let result={cp:0,mate:null,pv:[],best,depth:0};
+      const results=new Map();
       for(const line of lines) {
         const score=line.match(/score (cp|mate) (-?\d+)/), pv=line.match(/ pv (.+)$/), d=line.match(/depth (\d+)/);
         if(score&&pv&&!line.includes('upperbound')&&!line.includes('lowerbound')) {
           const mate=score[1]==='mate'?Number(score[2]):null;
-          result={cp:mate===null?Number(score[2]):Math.sign(mate||-1)*(100000-Math.min(999,Math.abs(mate))*100),mate,pv:pv[1].split(' '),best,depth:d?Number(d[1]):0};
+          const rank=Number(line.match(/multipv (\d+)/)?.[1]||1),moves=pv[1].split(' ');
+          results.set(rank,{cp:mate===null?Number(score[2]):Math.sign(mate||-1)*(100000-Math.min(999,Math.abs(mate))*100),mate,pv:moves,best:rank===1?best:moves[0],depth:d?Number(d[1]):0});
         }
       }
-      return result;
+      return [...results.entries()].sort((a,b)=>a[0]-b[0]).map(([,r])=>r);
     });
     this.chain=task.catch(()=>{});return task;
   }

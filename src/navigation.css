@@ -1,0 +1,43 @@
+.app-navigation{position:absolute;top:14px;left:262px;z-index:35;height:35px;display:flex;gap:5px}.app-navigation button{display:flex;align-items:center;justify-content:center;gap:7px;padding:6px 12px;background:transparent;border:1px solid transparent;border-radius:5px;color:#92ab80;font-size:11px}.app-navigation button[aria-current=page]{background:#30472a;border-color:#526c40;color:#deebce}.app-navigation svg{width:18px;height:18px;flex-shrink:0}.review-navigation{display:none}.studio .game-cards{grid-template-rows:repeat(var(--game-grid-rows,6),minmax(0,1fr));grid-template-columns:repeat(var(--game-columns,1),minmax(0,1fr))}
+@media(min-width:1600px){.app-navigation{top:18px;left:302px}}
+@media(max-width:900px){
+  :root{--mobile-menu-height:78px;--mobile-menu-space:calc(78px + env(safe-area-inset-bottom,0px))}
+  .studio.review-active{--mobile-menu-height:52px;--mobile-menu-space:calc(52px + env(safe-area-inset-bottom,0px))}
+  .studio .main{height:calc(100dvh - var(--mobile-menu-space));padding:8px 10px 6px}
+  .app-navigation{position:fixed;inset:auto 0 0 0;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:0;height:var(--mobile-menu-space);padding:0 0 env(safe-area-inset-bottom,0px);background:#18271def;border-top:1px solid #3c5333;box-shadow:0 -7px 22px #08100b66;backdrop-filter:blur(12px);border-radius:0;z-index:40}
+  .app-navigation button{display:flex;flex-direction:column;gap:6px;width:100%;height:var(--mobile-menu-height);padding:8px 3px;border:0;border-radius:0;font-size:11px;font-weight:500;color:#8fa87b}
+  .app-navigation button[aria-current=page]{background:#2b4125;color:#d9e9c5;box-shadow:inset 0 3px #b9d394;border:0}
+  .app-navigation svg{width:25px;height:25px}
+  .main-nav-in-review{display:none}
+  .review-navigation{display:grid;grid-template-columns:1fr 1fr;box-shadow:none}
+  .review-navigation button{flex-direction:row;gap:9px;font-size:12px;padding:6px}
+  .review-navigation button+button{border-left:1px solid #344a2b}
+  .review-navigation svg{width:21px;height:21px}
+  .studio .main.puzzles-mode .game-toolbar,.studio .main.insights-mode .game-toolbar,.studio .main.learn-mode .game-toolbar,.studio.review-active .game-toolbar{display:none}
+  .studio.view-games .main{visibility:hidden}
+  .studio.view-games .library.open{position:fixed;inset:0 0 var(--mobile-menu-space) 0;height:auto;width:100%;z-index:30;display:grid;grid-template-rows:52px 40px 36px 30px minmax(0,1fr) 36px;gap:8px;padding:12px 14px 8px;border:0}
+  .studio.view-games .library-title{min-height:0;display:flex;flex-direction:column;justify-content:center}
+  .studio.view-games .library-title h1{font-size:25px;line-height:1.1;margin:5px 0 0}
+  .studio.view-games .library-title .eyebrow{font-size:7px;letter-spacing:1.4px}
+  .studio.view-games .close-library,.studio.view-games .sync-note,.studio.view-games .library-foot{display:none}
+  .studio.view-games .sync-button{height:40px;padding:8px;font-size:12px}
+  .studio.view-games .search{height:36px;padding:7px 10px;font-size:12px}
+  .studio.view-games .filters{align-items:stretch;gap:8px}
+  .studio.view-games .filters button{font-size:11px;min-height:30px;padding:4px 0 7px}
+  .studio.view-games .game-cards{grid-template-columns:repeat(var(--game-columns,1),minmax(0,1fr));grid-template-rows:repeat(var(--game-grid-rows,6),minmax(0,1fr));gap:6px;min-height:0}
+  .studio.view-games .game-card{padding:7px 9px;gap:10px}
+  .studio.view-games .game-details strong{font-size:12px;margin-bottom:4px}
+  .studio.view-games .game-details small{font-size:9px}
+  .studio.view-games .saved-quality{font-size:12px}
+  .studio.view-games .library-pages{height:36px;gap:10px;font-size:11px}
+  .studio.view-games .library-pages button{height:36px;min-width:44px;border:1px solid #3d5530;background:#21341e}
+  .studio .main .phone-coach{min-height:0}
+}
+@media(max-width:900px) and (orientation:landscape){
+  :root{--mobile-menu-height:66px;--mobile-menu-space:calc(66px + env(safe-area-inset-bottom,0px))}
+  .app-navigation button{flex-direction:row;gap:8px}.app-navigation svg{width:23px;height:23px}.studio .main{padding:5px 8px}
+  .studio.view-games .library.open{grid-template-rows:36px 34px 30px 27px minmax(0,1fr) 32px;gap:5px;padding:6px 12px}
+  .studio.view-games .library-title h1{font-size:21px;margin:2px 0 0}.studio.view-games .library-title .eyebrow{display:none}
+  .studio.view-games .sync-button{height:34px;padding:5px}.studio.view-games .search{height:30px;padding:5px 9px}
+  .studio.view-games .filters button{min-height:27px;padding:3px 0 5px}.studio.view-games .library-pages,.studio.view-games .library-pages button{height:32px}
+}

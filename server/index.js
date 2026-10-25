@@ -8,6 +8,9 @@ import { Chess } from 'chess.js';
 import { Engine } from './engine.js';
 import { VERSION, classify, expectedScore, isSacrifice, sanLine, explain } from './grading.js';
 import {BOOK_VERSION,applyOpeningBook,gameOpeningMoves} from './openings.js';
+import {BackgroundService} from './background.js';
+import {aggregateInsights} from './insights.js';
+import {PuzzleService} from './puzzles.js';
 
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const dataDir=path.resolve(process.env.DATA_DIR||path.join(root,'data'));
@@ -16,13 +19,16 @@ const db=new DatabaseSync(path.join(dataDir,'chess.sqlite'));
 db.exec(`PRAGMA journal_mode=WAL; CREATE TABLE IF NOT EXISTS games (id TEXT PRIMARY KEY, ended INTEGER NOT NULL, body TEXT NOT NULL); CREATE TABLE IF NOT EXISTS reviews (id TEXT PRIMARY KEY, body TEXT NOT NULL); CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);`);
 const app=express(),engine=new Engine(), jobs=new Map();
 const username=process.env.CHESS_USERNAME||'', owner=process.env.TAILSCALE_OWNER||'',port=Number(process.env.PORT||8890),privatePort=Number(process.env.PRIVATE_PORT||8891);
-if(!/^[a-zA-Z0-9_-]{1,100}$/.test(username)||!owner) throw new Error('Set CHESS_USERNAME and TAILSCALE_OWNER before starting.');
+if(!/^[a-zA-Z0-9_-]{1,100}$/.test(username)||!owner)throw new Error('Set CHESS_USERNAME and TAILSCALE_OWNER before starting.');
 const token=randomBytes(32).toString('hex');
 const insert=db.prepare('INSERT OR REPLACE INTO games VALUES (?,?,?)');
 const storeReview=db.prepare('INSERT OR REPLACE INTO reviews VALUES (?,?)');
 const getGame=id=>{const row=db.prepare('SELECT body FROM games WHERE id=?').get(id);return row?JSON.parse(row.body):null;};
 const getReview=id=>{const row=db.prepare('SELECT body FROM reviews WHERE id=?').get(id);if(!row)return null;const review=JSON.parse(row.body);if(review.bookVersion!==BOOK_VERSION){applyOpeningBook(review);storeReview.run(id,JSON.stringify(review));}return review;};
 const lastSync=()=>db.prepare("SELECT value FROM settings WHERE key='lastSync'").get()?.value||null;
+const background=new BackgroundService({db,readReview:getReview,runReview:reviewGame,jobs,username});
+const insightCache=new Map();
+const puzzles=new PuzzleService({db,engine});
 app.disable('x-powered-by');
 app.use((req,res,next)=>{
   res.setHeader('X-Content-Type-Options','nosniff'); res.setHeader('Referrer-Policy','same-origin');
@@ -46,44 +52,33 @@ app.use('/api', (req,res,next)=>{
   }
   next();
 });
-app.get('/api/status',(req,res)=>res.json({username,token,lastSync:lastSync(),engine:'Stockfish 19 · local engine',explanations:'Free, engine-based',activeJob:[...jobs.values()].find(j=>j.status==='running')||null}));
+app.get('/api/status',(req,res)=>res.json({username,token,lastSync:lastSync(),engine:'Stockfish 19 · local engine',explanations:'Free, engine-based',activeJob:background.active,background:background.status()}));
 app.get('/api/games',(req,res)=>{
-  const games=db.prepare('SELECT body FROM games ORDER BY ended DESC LIMIT 300').all().map(r=>JSON.parse(r.body));
-  res.json({games:games.map(g=>{const review=getReview(g.id);return {...g,pgn:undefined,reviewed:Boolean(review),accuracy:review?.accuracy||null};}),lastSync:lastSync()});
+  const games=db.prepare('SELECT g.body,f.body fact FROM games g LEFT JOIN insight_facts f ON f.id=g.id ORDER BY g.ended DESC').all().map(row=>{const g=JSON.parse(row.body),fact=row.fact?JSON.parse(row.fact):null;return {...g,pgn:undefined,reviewed:!!fact?.reviewed,accuracy:fact?.quality!==null&&fact?.quality!==undefined?{[g.color]:fact.quality}:null};});
+  res.json({games,lastSync:lastSync()});
 });
-let syncing=null;
-async function chessFetch(url) {
-  for(let attempt=0;attempt<3;attempt++) {
-    const response=await fetch(url,{headers:{'User-Agent':`RookcursionPersonalReview/1.0 (Chess.com user ${username})`,'Accept':'application/json'},signal:AbortSignal.timeout(25000)});
-    if(response.ok)return response.json();
-    if((response.status===429||response.status>=500)&&attempt<2){await new Promise(r=>setTimeout(r,1500*(attempt+1)));continue;}
-    throw new Error(`Chess.com returned ${response.status}. Please try refreshing again shortly.`);
-  }
-}
-async function sync() {
-  const {archives}=await chessFetch(`https://api.chess.com/pub/player/${username}/games/archives`);
-  if(!Array.isArray(archives))throw new Error('Chess.com returned an unexpected archive response.');
-  let imported=0, skipped=0;
-  // Sequential requests respect the public API; expand backward until >=50 recent games.
-  for(const url of archives.slice().reverse()) {
-    if(typeof url!=='string'||!url.startsWith(`https://api.chess.com/pub/player/${username}/games/`)||!/^\d{4}\/\d{2}$/.test(url.split('/games/')[1]||''))continue;
-    const payload=await chessFetch(url);
-    for(const game of payload.games||[]) {
-      if(game.rules!=='chess'||!game.pgn){skipped++;continue;}
-      const id=game.uuid||game.url.split('/').at(-1), isWhite=game.white.username.toLowerCase()===username;
-      const me=isWhite?game.white:game.black, opponent=isWhite?game.black:game.white;
-      const result=me.result==='win'?'win':opponent.result==='win'?'loss':'draw';
-      const record={id,url:game.url,pgn:game.pgn,ended:game.end_time,white:game.white,black:game.black,color:isWhite?'w':'b',opponent:opponent.username,result,timeClass:game.time_class,timeControl:game.time_control,rated:game.rated,opening:game.eco?.split('/').at(-1)?.replaceAll('-',' ')||'Standard chess'};
-      insert.run(id,game.end_time,JSON.stringify(record));imported++;
-    }
-    if(imported>=50)break;
-  }
-  db.prepare("INSERT OR REPLACE INTO settings VALUES ('lastSync',?)").run(new Date().toISOString());
-  return {imported,skipped,lastSync:lastSync()};
-}
-app.post('/api/sync',async(req,res,next)=>{try{if(!syncing)syncing=sync().finally(()=>{syncing=null;});res.json(await syncing);}catch(e){next(e);}});
-app.get('/api/games/:id',(req,res)=>{const game=getGame(req.params.id);if(!game)return res.status(404).json({error:'Game not found.'});game.openingMoves=gameOpeningMoves(game.pgn);res.json({game,review:getReview(game.id),job:jobs.get(game.id)||null});});
-app.get('/api/jobs/:id',(req,res)=>res.json(jobs.get(req.params.id)||{status:'idle'}));
+app.post('/api/sync',async(req,res,next)=>{try{res.json(await background.pollRecent());}catch(error){next(error);}});
+app.get('/api/insights',(req,res)=>{
+  const scope=['all','rapid','blitz','bullet'].includes(req.query.scope)?req.query.scope:'all',pipeline=background.status();
+  const cacheKey=scope+':'+pipeline.revision;let data=insightCache.get(cacheKey);
+  if(!data){const facts=db.prepare('SELECT body FROM insight_facts').all().map(row=>JSON.parse(row.body));data=aggregateInsights(facts,scope);if(insightCache.size>8)insightCache.clear();insightCache.set(cacheKey,data);}
+  res.json({...data,pipeline,generatedAt:new Date().toISOString()});
+});
+app.post('/api/background',(req,res)=>{
+  if(typeof req.body.paused==='boolean')background.setPaused(req.body.paused);
+  if(req.body.retryFailed===true)background.retryFailed();
+  res.json(background.status());
+});
+app.get('/api/puzzles',(req,res)=>{
+  const scope=['all','rapid','blitz','bullet'].includes(req.query.scope)?req.query.scope:'all';
+  res.json(puzzles.next({scope,theme:String(req.query.theme||'all'),exclude:String(req.query.exclude||''),mode:req.query.mode==='learn'?'learn':'puzzles'}));
+});
+app.post('/api/puzzles/:id/answer',async(req,res,next)=>{try{
+  const result=await puzzles.answer(req.params.id,req.body);
+  res.status(result.status||200).json(result);
+}catch(error){next(error);}});
+app.get('/api/games/:id',(req,res)=>{const game=getGame(req.params.id);if(!game)return res.status(404).json({error:'Game not found.'});game.openingMoves=gameOpeningMoves(game.pgn);res.json({game,review:getReview(game.id),job:background.getJob(game.id)});});
+app.get('/api/jobs/:id',(req,res)=>res.json(background.getJob(req.params.id)||{status:'idle'}));
 async function reviewGame(game,job,depth) {
   const board=new Chess();board.loadPgn(game.pgn);
   const history=board.history({verbose:true});
@@ -118,11 +113,9 @@ async function reviewGame(game,job,depth) {
 }
 app.post('/api/games/:id/analyze',(req,res)=>{
   const game=getGame(req.params.id);if(!game)return res.status(404).json({error:'Game not found.'});
-  const active=[...jobs.values()].find(j=>j.status==='running');
-  if(active)return active.id===game.id?res.json(active):res.status(409).json({error:'Another game is being analyzed. You can review saved games while it finishes.'});
   const depth=[12,15,18].includes(req.body.depth)?req.body.depth:15;
-  const job={id:game.id,status:'running',completed:0,total:0,percent:0,depth};jobs.set(game.id,job);
-  reviewGame(game,job,depth).catch(e=>{job.status='error';job.error=e.message;console.error('Analysis failed:',e.message);});res.status(202).json(job);
+  background.enqueue(game.id,{priority:100,depth,force:true});background.work().catch(error=>console.error(error.message));
+  res.status(202).json(background.getJob(game.id));
 });
 app.get('/api/games/:id/pgn',(req,res)=>{const game=getGame(req.params.id);if(!game)return res.sendStatus(404);res.setHeader('Content-Disposition',`attachment; filename="game-${game.id.replace(/[^a-zA-Z0-9-]/g,'')}.pgn"`);res.type('text/plain').send(game.pgn);});
 // Serve strips its /chess mount before forwarding, so both public /chess and
@@ -139,6 +132,7 @@ app.get(['/', '/index.html'],(req,res,next)=>{
 app.use(express.static(path.join(root,'dist'),{index:'index.html'}));
 app.use('/api',(req,res)=>res.status(404).json({error:'API route not found.'}));
 app.use((error,req,res,next)=>{console.error(error.message);res.status(500).json({error:error.message||'Something went wrong. Please retry.'});});
-const server=app.listen(port,'127.0.0.1',()=>console.log(`Rookcursion listening on http://127.0.0.1:${port}`));
+const server=app.listen(port,'127.0.0.1',()=>console.log(`Afterboard listening on http://127.0.0.1:${port}`));
 const privateServer=app.listen(privatePort,'127.0.0.1',()=>console.log(`Private Tailscale listener on 127.0.0.1:${privatePort}`));
-process.on('SIGTERM',()=>{engine.close();server.close();privateServer.close();});
+background.start();
+process.on('SIGTERM',()=>{background.stop();engine.close();server.close();privateServer.close();});
