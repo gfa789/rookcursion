@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {aggregateInsights,phaseOf,mistakeTheme} from '../server/insights.js';
+import {aggregateInsights,phaseOf,mistakeTheme,insightPeriod} from '../server/insights.js';
 import {Chess} from 'chess.js';
 
 function fact(id,timeClass,result,reviewed=false){return {id:String(id),ended:1609459200+id*2678400,timeClass,color:timeClass==='rapid'?'w':'b',result,rated:true,rating:1000+id*10,opponentRating:1000,opponent:'rival',opening:timeClass==='rapid'?'Italian Game: Main Line':'Sicilian Defense: Dragon',reviewed,depth:reviewed?12:null,quality:reviewed?90:null,ownMoves:reviewed?20:0,counts:reviewed?{Best:18,Mistake:1,Blunder:1}:{},phases:reviewed?{Opening:{moves:20,errors:2,blunders:1}}:{},themes:reviewed?{'Opening decisions':{count:2,impact:.2}}:{},examples:[]};}
@@ -22,4 +22,27 @@ test('mistake patterns describe concrete engine replies without assuming a hangi
   const b=new Chess('4k3/8/8/3q4/8/2N5/8/4K3 w - - 0 1');const m=b.move('Nb5');
   const row={ply:21,fenBefore:m.before,fenAfter:m.after,afterMate:null,replyLine:['Qxb5'],bestSan:'Nxd5'};
   assert.equal(mistakeTheme(row),'Costly moves allowing piece captures');assert.equal(phaseOf({...row,ply:3}),'Opening');
+});
+test('period boundaries use YTD, rolling 90 days and a clamped calendar month',()=>{
+  const now=Date.parse('2026-10-25T12:00:00Z');
+  assert.equal(insightPeriod('ytd',now).start,Date.parse('2026-01-01T00:00:00Z')/1000);
+  assert.equal(insightPeriod('90d',now).start,(now-90*86400000)/1000);
+  assert.equal(insightPeriod('month',now).start,Date.parse('2026-09-25T12:00:00Z')/1000);
+  assert.equal(insightPeriod('month',Date.parse('2026-03-31T18:30:00Z')).start,Date.parse('2026-02-28T18:30:00Z')/1000);
+  assert.equal(insightPeriod('month',Date.parse('2024-03-31T18:30:00Z')).start,Date.parse('2024-02-29T18:30:00Z')/1000);
+  assert.equal(insightPeriod('invalid',now).key,'all');
+});
+test('date filtering changes counts, openings, errors and ratings together with inclusive boundaries',()=>{
+  const now=Date.parse('2026-10-25T12:00:00Z'),start=insightPeriod('90d',now).start;
+  const games=[{...fact(1,'rapid','win',true),ended:start-1},{...fact(2,'rapid','loss',true),ended:start},{...fact(3,'rapid','win'),ended:now/1000},{...fact(4,'rapid','loss',true),ended:now/1000+1},{...fact(5,'blitz','win',true),ended:start+1}];
+  const data=aggregateInsights(games,'rapid',{range:'90d',now});
+  assert.equal(data.total,2);assert.equal(data.reviewed,1);assert.equal(data.score,50);assert.equal(data.openings[0].games,2);assert.equal(data.patterns[0].count,2);assert.equal(data.ownMoves,20);assert.equal(data.ratings[0].start,1020);assert.equal(data.ratings[0].current,1030);assert.equal(data.ratings[0].change,10);
+  assert.ok(data.ratings[0].points.every(p=>p.ended>=start&&p.ended<=now/1000));
+  assert.equal(aggregateInsights(games,'bullet',{range:'month',now}).total,0);
+});
+test('short rating ranges retain daily detail and the real period-start rating',()=>{
+  const now=Date.parse('2026-10-25T12:00:00Z');
+  const games=Array.from({length:20},(_,i)=>({...fact(i+1,'rapid','win'),ended:Date.parse(`2026-10-${String(i+1).padStart(2,'0')}T10:00:00Z`)/1000}));
+  const short=aggregateInsights(games,'rapid',{range:'month',now}),all=aggregateInsights(games,'rapid',{range:'all',now});
+  assert.equal(short.period.bucket,'day');assert.equal(short.ratings[0].points.length,20);assert.equal(all.period.bucket,'month');assert.equal(all.ratings[0].points.length,2);assert.equal(all.ratings[0].points[0].rating,1010);assert.equal(all.ratings[0].points.at(-1).rating,1200);
 });

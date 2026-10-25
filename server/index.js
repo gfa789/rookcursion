@@ -60,8 +60,9 @@ app.get('/api/games',(req,res)=>{
 app.post('/api/sync',async(req,res,next)=>{try{res.json(await background.pollRecent());}catch(error){next(error);}});
 app.get('/api/insights',(req,res)=>{
   const scope=['all','rapid','blitz','bullet'].includes(req.query.scope)?req.query.scope:'all',pipeline=background.status();
-  const cacheKey=scope+':'+pipeline.revision;let data=insightCache.get(cacheKey);
-  if(!data){const facts=db.prepare('SELECT body FROM insight_facts').all().map(row=>JSON.parse(row.body));data=aggregateInsights(facts,scope);if(insightCache.size>8)insightCache.clear();insightCache.set(cacheKey,data);}
+  const range=['all','ytd','90d','month'].includes(req.query.range)?req.query.range:'all',now=Date.now();
+  const cacheKey=`${scope}:${range}:${pipeline.revision}:${Math.floor(now/60000)}`;let data=insightCache.get(cacheKey);
+  if(!data){const facts=db.prepare('SELECT body FROM insight_facts').all().map(row=>JSON.parse(row.body));data=aggregateInsights(facts,scope,{range,now});if(insightCache.size>16)insightCache.clear();insightCache.set(cacheKey,data);}
   res.json({...data,pipeline,generatedAt:new Date().toISOString()});
 });
 app.post('/api/background',(req,res)=>{

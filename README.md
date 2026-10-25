@@ -32,3 +32,11 @@ The bundled opening catalogue is from [lichess-org/chess-openings](https://githu
 ## Checks
 
 `npm test` and `npm run build`.
+
+## Insights and date ranges
+
+Insights opens on the rating trajectory. Time-control and date-range toggles apply together to results, opening rankings, recurring mistakes, source-game examples and ratings. All time uses the full history; YTD starts on 1 January; 90 days is a rolling 90-day window; Last month starts at the same date and time in the previous calendar month, clamped to its last day when necessary. Date calculations use UTC and display dates use Europe/London. Future-dated records are excluded.
+
+Rating charts use monthly checkpoints for all time, weekly checkpoints for YTD, and daily checkpoints for shorter ranges, with the first rating in the period retained as an anchor. Rating change and peak refer to the selected period. An empty period does not borrow older ratings.
+
+Explore insights opens large Results, Openings, Mistakes and Background sections. Opening / mistake rows drill into a detail view before opening a source game. Compact Back / Ratings controls replace the main menu in drilled-in views, and Back from a source review returns to the same insight. Filters and list pages remain available when navigating back. Background progress always covers the complete queue.

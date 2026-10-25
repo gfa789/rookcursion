@@ -41,3 +41,9 @@
   .studio.view-games .sync-button{height:34px;padding:5px}.studio.view-games .search{height:30px;padding:5px 9px}
   .studio.view-games .filters button{min-height:27px;padding:3px 0 5px}.studio.view-games .library-pages,.studio.view-games .library-pages button{height:32px}
 }
+
+/* Drilled-in views use the same compact navigation on laptop and phone. */
+.studio .main-nav-in-review{display:none}.studio .review-navigation{display:flex}
+.studio.view-review .game-toolbar>button[aria-label="Flip board"]{display:none}
+@media(min-width:901px){.app-navigation{height:44px;top:9px}.app-navigation button{min-height:44px}}
+@media(max-width:900px){.studio .review-navigation{display:grid}}

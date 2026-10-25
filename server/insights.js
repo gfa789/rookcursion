@@ -36,8 +36,21 @@ export function buildGameFact(game,review=null){
   fact.examples.sort((a,b)=>b.impact-a.impact);fact.examples=fact.examples.slice(0,3);
   return fact;
 }
-export function aggregateInsights(allFacts,scope='all'){
-  const facts=allFacts.filter(f=>scope==='all'||f.timeClass===scope).sort((a,b)=>a.ended-b.ended);
+export function insightPeriod(key='all',now=Date.now()){
+  key=['all','ytd','90d','month'].includes(key)?key:'all';
+  const end=new Date(now);let start=null;
+  if(key==='ytd')start=Date.UTC(end.getUTCFullYear(),0,1);
+  if(key==='90d')start=now-90*86400000;
+  if(key==='month'){
+    const monthStart=new Date(Date.UTC(end.getUTCFullYear(),end.getUTCMonth()-1,1));
+    const lastDay=new Date(Date.UTC(monthStart.getUTCFullYear(),monthStart.getUTCMonth()+1,0)).getUTCDate();
+    monthStart.setUTCDate(Math.min(end.getUTCDate(),lastDay));monthStart.setUTCHours(end.getUTCHours(),end.getUTCMinutes(),end.getUTCSeconds(),end.getUTCMilliseconds());start=monthStart.getTime();
+  }
+  return {key,start:start===null?null:Math.floor(start/1000),end:Math.floor(now/1000),bucket:key==='all'?'month':key==='ytd'?'week':'day'};
+}
+export function aggregateInsights(allFacts,scope='all',options={}){
+  const period=insightPeriod(options.range,options.now??Date.now());
+  const facts=allFacts.filter(f=>(scope==='all'||f.timeClass===scope)&&(period.start===null||f.ended>=period.start)&&f.ended<=period.end).sort((a,b)=>a.ended-b.ended);
   const reviewed=facts.filter(f=>f.reviewed),counts={win:0,loss:0,draw:0},grades={},phases={},themes={},openingMap=new Map();
   const colours={w:{games:0,win:0,loss:0,draw:0},b:{games:0,win:0,loss:0,draw:0}};
   let ownMoves=0;
@@ -46,7 +59,7 @@ export function aggregateInsights(allFacts,scope='all'){
     const family=fact.opening.split(':')[0],key=`${fact.color}|${family}`;
     if(!openingMap.has(key))openingMap.set(key,{name:family,color:fact.color,eco:fact.eco,games:0,win:0,loss:0,draw:0,reviewed:0,qualities:[],examples:[]});
     const opening=openingMap.get(key);opening.games++;opening[fact.result]++;
-    if(opening.examples.length<3)opening.examples.push({id:fact.id,opponent:fact.opponent,ended:fact.ended});
+    opening.examples.unshift({id:fact.id,opponent:fact.opponent,ended:fact.ended});opening.examples=opening.examples.slice(0,3);
     if(!fact.reviewed)continue;
     opening.reviewed++;if(fact.quality!==null)opening.qualities.push(fact.quality);ownMoves+=fact.ownMoves;
     for(const [grade,n]of Object.entries(fact.counts))grades[grade]=(grades[grade]||0)+n;
@@ -60,8 +73,13 @@ export function aggregateInsights(allFacts,scope='all'){
   const controls=scope==='all'?['rapid','blitz','bullet','daily']:[scope];
   const ratings=controls.map(control=>{
     const games=facts.filter(f=>f.timeClass===control&&f.rated&&Number.isFinite(f.rating));
-    const buckets=new Map();for(const game of games){const month=new Date(game.ended*1000).toISOString().slice(0,7);buckets.set(month,{date:month,rating:game.rating,ended:game.ended});}
-    return {control,games:games.length,start:games[0]?.rating??null,current:games.at(-1)?.rating??null,peak:games.length?Math.max(...games.map(g=>g.rating)):null,change:games.length?games.at(-1).rating-games[0].rating:null,points:[...buckets.values()]};
+    const buckets=new Map();for(const game of games){
+      const date=new Date(game.ended*1000);
+      if(period.bucket==='week')date.setUTCDate(date.getUTCDate()-(date.getUTCDay()+6)%7);
+      const bucket=date.toISOString().slice(0,period.bucket==='month'?7:10);buckets.set(bucket,{date:bucket,rating:game.rating,ended:game.ended});
+    }
+    const points=[...buckets.values()];if(games.length&&points[0]?.ended!==games[0].ended)points.unshift({date:new Date(games[0].ended*1000).toISOString().slice(0,period.bucket==='month'?7:10),rating:games[0].rating,ended:games[0].ended});
+    return {control,games:games.length,start:games[0]?.rating??null,current:games.at(-1)?.rating??null,peak:games.length?Math.max(...games.map(g=>g.rating)):null,change:games.length?games.at(-1).rating-games[0].rating:null,points};
   }).filter(r=>r.games);
   const recent=facts.slice(-30),previous=facts.slice(-60,-30),score=list=>list.length?round(list.reduce((s,g)=>s+(g.result==='win'?1:g.result==='draw'?.5:0),0)/list.length*100):null;
   const examples=reviewed.flatMap(f=>f.examples).sort((a,b)=>b.impact-a.impact).slice(0,50);
@@ -71,5 +89,5 @@ export function aggregateInsights(allFacts,scope='all'){
   const weakest=Object.entries(phases).filter(([,p])=>p.moves>=30).sort((a,b)=>b[1].errors/b[1].moves-a[1].errors/a[1].moves)[0];
   if(weakest)highlights.push({title:'Focus your next study session',body:`${weakest[0]}: ${round(weakest[1].errors/weakest[1].moves*100)} costly moves per 100 moves, based on ${weakest[1].moves} moves.`});
   if(!highlights.length)highlights.push({title:'Your history is being prepared',body:'Opening and result statistics appear as archives arrive. Engine-based insights build as reviews finish.'});
-  return {scope,total:facts.length,reviewed:reviewed.length,coverage:facts.length?round(reviewed.length/facts.length*100):0,counts,score:score(facts),quality:mean(reviewed.map(f=>f.quality).filter(v=>v!==null)),ownMoves,grades,blundersPer100:ownMoves?round((grades.Blunder||0)/ownMoves*100):null,errorRate:ownMoves?round(((grades.Inaccuracy||0)+(grades.Mistake||0)+(grades.Blunder||0))/ownMoves*100):null,first:facts[0]?.ended||null,last:facts.at(-1)?.ended||null,recent:{games:recent.length,score:score(recent),previousScore:score(previous)},colours,openings,bestOpenings:ranked(-1),worstOpenings:ranked(1),minimumOpeningSample:5,patterns,phases:Object.entries(phases).map(([name,p])=>({name,...p,errorRate:round(p.errors/p.moves*100)})),ratings,examples,highlights,depths:[...new Set(reviewed.map(f=>f.depth))].sort((a,b)=>a-b)};
+  return {scope,period,total:facts.length,reviewed:reviewed.length,coverage:facts.length?round(reviewed.length/facts.length*100):0,counts,score:score(facts),quality:mean(reviewed.map(f=>f.quality).filter(v=>v!==null)),ownMoves,grades,blundersPer100:ownMoves?round((grades.Blunder||0)/ownMoves*100):null,errorRate:ownMoves?round(((grades.Inaccuracy||0)+(grades.Mistake||0)+(grades.Blunder||0))/ownMoves*100):null,first:facts[0]?.ended||null,last:facts.at(-1)?.ended||null,recent:{games:recent.length,score:score(recent),previousScore:score(previous)},colours,openings,bestOpenings:ranked(-1),worstOpenings:ranked(1),minimumOpeningSample:5,patterns,phases:Object.entries(phases).map(([name,p])=>({name,...p,errorRate:round(p.errors/p.moves*100)})),ratings,examples,highlights,depths:[...new Set(reviewed.map(f=>f.depth))].sort((a,b)=>a-b)};
 }
