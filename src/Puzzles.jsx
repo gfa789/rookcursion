@@ -18,17 +18,19 @@ function ControlIcon({name}){
   const paths={hint:<><path d="M9 18h6M10 21h4M8 14a6 6 0 1 1 8 0l-1 2H9Z"/></>,reveal:<><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></>,options:<path d="M4 7h16M4 17h16M9 4v6m6 4v6"/>,left:<path d="m14 5-7 7 7 7"/>,right:<path d="m10 5 7 7-7 7"/>,next:<path d="M4 12h16m-7-7 7 7-7 7"/>};
   return <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name]}</svg>;
 }
-export default function Puzzles({token,onOpenGame,mode='puzzles'}){
+export default function Puzzles({token,onOpenGame,mode='puzzles',active=true}){
   const [scope,setScope]=useState('all'),[theme,setTheme]=useState('all'),[round,setRound]=useState(0),[exclude,setExclude]=useState('');
   const [puzzle,setPuzzle]=useState(null),[meta,setMeta]=useState(null),[session,setSession]=useState(null),[fen,setFen]=useState(null),[completed,setCompleted]=useState(0);
   const [idea,setIdea]=useState(''),[selected,setSelected]=useState(null),[result,setResult]=useState(null),[message,setMessage]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState(''),[promotion,setPromotion]=useState(null),[sheet,setSheet]=useState(null),[lineIndex,setLineIndex]=useState(0),[played,setPlayed]=useState(null);
   const replyTimer=useRef(null),generation=useRef(0),closeSheet=useRef(null),openSheet=useRef(null);
+  const activeRef=useRef(active),readRef=useRef(null);
+  useEffect(()=>{activeRef.current=active;if(active)readRef.current?.();},[active]);
   useEffect(()=>{
     const controller=new AbortController();const version=++generation.current;let assigned=false,inFlight=false;
     clearTimeout(replyTimer.current);setPuzzle(null);setSession(null);setResult(null);setSelected(null);setMessage('');setPromotion(null);setError('');setLineIndex(0);setCompleted(0);setPlayed(null);setBusy(false);setIdea('');
     if(!token)return()=>controller.abort();
     async function read(){
-      if(inFlight||assigned)return;inFlight=true;
+      if(!activeRef.current||inFlight||assigned)return;inFlight=true;
       try{
         const data=await request(`puzzles?${new URLSearchParams({scope,theme,exclude,mode})}`,undefined,undefined,controller.signal);
         if(controller.signal.aborted)return;setMeta(data);
@@ -39,9 +41,9 @@ export default function Puzzles({token,onOpenGame,mode='puzzles'}){
         }
       }catch(e){if(!controller.signal.aborted)setError(e.message);}finally{inFlight=false;}
     }
-    read();const timer=setInterval(read,4000);return()=>{controller.abort();clearInterval(timer);clearTimeout(replyTimer.current);generation.current++;};
+    readRef.current=read;read();const timer=setInterval(read,4000);return()=>{if(readRef.current===read)readRef.current=null;controller.abort();clearInterval(timer);clearTimeout(replyTimer.current);generation.current++;};
   },[scope,theme,round,exclude,token,mode]);
-  useEffect(()=>{if(sheet)closeSheet.current?.focus();},[sheet]);
+  useEffect(()=>{if(sheet&&active)closeSheet.current?.focus();},[sheet,active]);
   const board=useMemo(()=>fen?new Chess(fen):null,[fen]);
   const targets=board&&selected&&!result&&!busy?board.moves({square:selected,verbose:true}).map(m=>m.to):[];
   const shown=useMemo(()=>{
