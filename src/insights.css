@@ -12,3 +12,13 @@
 
 .insights-heading .insight-back{display:none}
 @media(max-width:900px) and (orientation:landscape){.pipeline-card{gap:3px}}
+
+/* Keep the page fixed while long insight collections scroll within their panel. */
+.infinite-list{display:flex;flex-direction:column;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:#68864d transparent;touch-action:pan-y;gap:8px;outline-offset:-2px}
+.infinite-list>.opening-row,.infinite-list>.pattern-row,.infinite-list>.example-row{flex:none;min-height:88px}
+.infinite-list>.pattern-row,.infinite-list>.example-row{min-height:76px}
+.list-end{flex:none;text-align:center;padding:14px 6px;color:#92ab7f;font-size:12px;line-height:1.4}
+.infinite-list>.focus-copy{flex:none;min-height:160px;padding:12px 2px 20px;border-bottom:1px solid #3a5230}
+.rating-plot svg{cursor:crosshair;touch-action:manipulation}.rating-plot g[role=button]{cursor:pointer;outline:none}.rating-dot{transition:r .12s}.rating-plot g[role=button]:hover .rating-dot,.rating-plot g[role=button]:focus .rating-dot{r:6;stroke:#fff;stroke-width:2}
+.checkpoint-summary{flex:none;display:flex;flex-direction:column;gap:6px}.checkpoint-summary>span{font-size:14px;color:#b4c99f;text-transform:capitalize}.checkpoint-summary>strong{font-size:36px;font-weight:400;color:#d7e8c2}.checkpoint-summary small{font-size:16px}.checkpoint-summary p{font-size:13px;line-height:1.5;color:#9eb78b;margin:0}
+@media(max-width:900px) and (orientation:landscape){.checkpoint-card{flex-direction:row}.checkpoint-summary{width:220px;justify-content:center}.infinite-list>.focus-copy{display:flex;min-height:170px;gap:10px}.infinite-list>.focus-copy .insight-action{min-height:44px}}

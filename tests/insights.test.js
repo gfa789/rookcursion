@@ -46,3 +46,18 @@ test('short rating ranges retain daily detail and the real period-start rating',
   const short=aggregateInsights(games,'rapid',{range:'month',now}),all=aggregateInsights(games,'rapid',{range:'all',now});
   assert.equal(short.period.bucket,'day');assert.equal(short.ratings[0].points.length,20);assert.equal(all.period.bucket,'month');assert.equal(all.ratings[0].points.length,2);assert.equal(all.ratings[0].points[0].rating,1010);assert.equal(all.ratings[0].points.at(-1).rating,1200);
 });
+
+test('rating checkpoints expose exactly the rated games in their bucket and control',()=>{
+  const now=Date.parse('2026-10-25T12:00:00Z');
+  const make=(id,day,control='rapid')=>({...fact(id,control,'win',id===2),ended:Date.parse(`2026-10-${day}T10:00:00Z`)/1000});
+  const games=[make(1,'01'),make(2,'02'),make(3,'02'),make(4,'03','blitz'),{...make(5,'02'),rated:false},make(6,'25')];
+  const monthly=aggregateInsights(games,'all',{now}).ratings.find(r=>r.control==='rapid');
+  assert.equal(monthly.points[0].anchor,true);assert.deepEqual(monthly.points[0].games.map(g=>g.id),['1']);
+  assert.deepEqual(monthly.points.at(-1).games.map(g=>g.id),['1','2','3','6']);
+  assert.equal(monthly.points.at(-1).rating,1060);assert.equal(monthly.points.at(-1).games[1].reviewed,true);
+  const daily=aggregateInsights(games,'rapid',{range:'month',now}).ratings[0];
+  const point=daily.points.find(p=>p.date==='2026-10-02');assert.deepEqual(point.games.map(g=>g.id),['2','3']);assert.equal(point.rating,1030);
+  const weekly=aggregateInsights(games,'rapid',{range:'ytd',now}).ratings[0];
+  assert.deepEqual(weekly.points.find(p=>!p.anchor&&p.date==='2026-09-28').games.map(g=>g.id),['1','2','3']);
+  assert.ok(daily.points.every(p=>p.games.every(g=>g.ended<=now/1000)));
+});

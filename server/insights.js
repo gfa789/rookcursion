@@ -73,12 +73,13 @@ export function aggregateInsights(allFacts,scope='all',options={}){
   const controls=scope==='all'?['rapid','blitz','bullet','daily']:[scope];
   const ratings=controls.map(control=>{
     const games=facts.filter(f=>f.timeClass===control&&f.rated&&Number.isFinite(f.rating));
+    const gameSummary=game=>({id:game.id,ended:game.ended,rating:game.rating,opponent:game.opponent,result:game.result,reviewed:game.reviewed});
     const buckets=new Map();for(const game of games){
       const date=new Date(game.ended*1000);
       if(period.bucket==='week')date.setUTCDate(date.getUTCDate()-(date.getUTCDay()+6)%7);
-      const bucket=date.toISOString().slice(0,period.bucket==='month'?7:10);buckets.set(bucket,{date:bucket,rating:game.rating,ended:game.ended});
+      const bucket=date.toISOString().slice(0,period.bucket==='month'?7:10);const previous=buckets.get(bucket);buckets.set(bucket,{date:bucket,rating:game.rating,ended:game.ended,games:[...(previous?.games||[]),gameSummary(game)]});
     }
-    const points=[...buckets.values()];if(games.length&&points[0]?.ended!==games[0].ended)points.unshift({date:new Date(games[0].ended*1000).toISOString().slice(0,period.bucket==='month'?7:10),rating:games[0].rating,ended:games[0].ended});
+    const points=[...buckets.values()];if(games.length&&points[0]?.ended!==games[0].ended)points.unshift({date:new Date(games[0].ended*1000).toISOString().slice(0,period.bucket==='month'?7:10),rating:games[0].rating,ended:games[0].ended,games:[gameSummary(games[0])],anchor:true});
     return {control,games:games.length,start:games[0]?.rating??null,current:games.at(-1)?.rating??null,peak:games.length?Math.max(...games.map(g=>g.rating)):null,change:games.length?games.at(-1).rating-games[0].rating:null,points};
   }).filter(r=>r.games);
   const recent=facts.slice(-30),previous=facts.slice(-60,-30),score=list=>list.length?round(list.reduce((s,g)=>s+(g.result==='win'?1:g.result==='draw'?.5:0),0)/list.length*100):null;
