@@ -6,6 +6,7 @@ import {refreshAnalysis} from './analysis-refresh.js';
 import Insights from './Insights.jsx';
 import Puzzles from './Puzzles.jsx';
 import Navigation from './Navigation.jsx';
+import GamesList from './GamesList.jsx';
 const START=new Chess().fen();
 const date=n=>new Date(n*1000).toLocaleDateString('en-GB',{day:'numeric',month:'short'});
 const timeControl=n=>{const [base,inc]=String(n).split('+');return Number(base)<3600?`${Number(base)/60}${inc?' + '+inc:''} min`:'Daily';};
@@ -42,7 +43,7 @@ function EvaluationChart({review,index,onMove}){return <div className="chart"><d
 export default function Studio(){
   const [status,setStatus]=useState(null),[games,setGames]=useState([]),[selected,setSelected]=useState(null),[game,setGame]=useState(null),[review,setReview]=useState(null),[job,setJob]=useState(null);
   const [index,setIndex]=useState(-1),[flipped,setFlipped]=useState(false),[syncing,setSyncing]=useState(false),[loading,setLoading]=useState(true),[error,setError]=useState(''),[notice,setNotice]=useState('');
-  const [filter,setFilter]=useState('all'),[search,setSearch]=useState(''),[depth,setDepth]=useState(15),[playing,setPlaying]=useState(false),[library,setLibrary]=useState(true),[screen,setScreen]=useState('summary'),[gamePage,setGamePage]=useState(0);
+  const [filter,setFilter]=useState('all'),[search,setSearch]=useState(''),[depth,setDepth]=useState(15),[playing,setPlaying]=useState(false),[library,setLibrary]=useState(true),[screen,setScreen]=useState('summary');
   const [view,setView]=useState('games');
   const [insightsRoute,setInsightsRoute]=useState({section:'Rating',entry:null}),[insightsVisited,setInsightsVisited]=useState(false),[reviewReturn,setReviewReturn]=useState('games');
   useEffect(()=>{if(view==='insights')setInsightsVisited(true);},[view]);
@@ -50,9 +51,7 @@ export default function Studio(){
   function backWithinInsights(){setInsightsRoute(route=>route.entry?{section:route.section,entry:route.entry.point&&route.entry.chartFocus?{control:route.entry.chartFocus}:null}:{section:route.section==='Explore'?'Rating':'Explore',entry:null});}
   const [practiceViews,setPracticeViews]=useState([]);
   useEffect(()=>{if(['puzzles','learn'].includes(view))setPracticeViews(visited=>visited.includes(view)?visited:[...visited,view]);},[view]);
-  const [gamesPerPage,setGamesPerPage]=useState(6),[gameColumns,setGameColumns]=useState(1);
-  const gameListRef=useRef(null);
-  useEffect(()=>{const list=gameListRef.current;if(!list)return;const observer=new ResizeObserver(([entry])=>{const {width,height}=entry.contentRect;if(height<1)return;const columns=width>500?2:1;setGameColumns(columns);setGamesPerPage(Math.max(columns,Math.min(6,Math.floor((height+6)/56)*columns)));});observer.observe(list);return()=>observer.disconnect();},[]);
+  const gameListMemory=useRef(new Map());
   const selectedRef=useRef(null),tableRef=useRef(null),pendingInsightRef=useRef(null),revisionRef=useRef(null);
   const [moveRows,setMoveRows]=useState(8);
   useEffect(()=>{const element=tableRef.current;if(!element)return;const observer=new ResizeObserver(entries=>{const height=entries[0].contentRect.height;if(height>0)setMoveRows(Math.max(1,Math.min(8,Math.floor(height/24))));});observer.observe(element);return()=>observer.disconnect();},[]);
@@ -69,8 +68,7 @@ export default function Studio(){
   const go=useCallback(n=>{setIndex(Math.max(-1,Math.min(total-1,n)));setPlaying(false);},[total]);
   useEffect(()=>{const handle=e=>{if(view!=='review'||['INPUT','SELECT','TEXTAREA'].includes(e.target.tagName)||e.altKey||e.ctrlKey||e.metaKey)return;if(e.key==='ArrowRight'||e.key==='ArrowLeft'){e.preventDefault();go(index+(e.key==='ArrowRight'?1:-1));}};window.addEventListener('keydown',handle);return()=>window.removeEventListener('keydown',handle);},[index,go,view]);
   useEffect(()=>{if(!playing)return;const timer=setInterval(()=>{setIndex(n=>{if(n>=total-1){setPlaying(false);return n;}return n+1;});},1600);return()=>clearInterval(timer);},[playing,total]);
-  const filtered=games.filter(g=>(filter==='all'||g.timeClass===filter)&&g.opponent.toLowerCase().includes(search.toLowerCase()));
-  const perPage=gamesPerPage,pageCount=Math.max(1,Math.ceil(filtered.length/perPage)),page=Math.min(gamePage,pageCount-1),visibleGames=filtered.slice(page*perPage,(page+1)*perPage);
+  const filtered=useMemo(()=>games.filter(g=>(filter==='all'||g.timeClass===filter)&&g.opponent.toLowerCase().includes(search.toLowerCase())),[games,filter,search]);
   const pageSize=moveRows*2,movePage=Math.floor(Math.max(0,index)/pageSize),pageMoves=moves.slice(movePage*pageSize,(movePage+1)*pageSize);
   const fen=current?.fenAfter||parsed?.initial||START,played=current?.uci,grade=current?.classification;
   const best=current?.classification!=='Book'&&current?.bestUci!==current?.uci?current?.bestUci:null,topColor=flipped?'w':'b',bottomColor=flipped?'b':'w';
@@ -80,8 +78,8 @@ export default function Studio(){
   function openInsight(id,targetIndex=0,returnTo='games'){setReviewReturn(returnTo);setView('review');setLibrary(false);if(id===selected){go(targetIndex);setScreen(review||targetIndex>=0?'review':'summary');}else{pendingInsightRef.current={id,index:targetIndex};setSelected(id);}}
   const coachProps={row:current,review,index};
   return <div className={`studio screen-${screen} view-${view} ${view==='review'||view==='insights'&&insightsDrilled?'review-active':''}`}><aside className={`library ${library?'open':''}`} aria-label="Game library"><div className="library-title"><span className="eyebrow">GEORGE’S CHESS STUDIO</span><button className="icon-button close-library" aria-label="Close game library" onClick={()=>setLibrary(false)}><Icon name="close"/></button><h1>Game library <small>{games.length}</small></h1></div><button className="sync-button" disabled={syncing||!status} onClick={()=>syncGames()}><Icon name="refresh"/>{syncing?'Syncing…':'Sync latest games'}</button><span className="sync-note">chess.com / georgeatki {status?.lastSync&&`· ${date(new Date(status.lastSync).getTime()/1000)}`}</span>
-    <input className="search" aria-label="Search opponents" placeholder="Find an opponent…" value={search} onChange={e=>{setSearch(e.target.value);setGamePage(0);}}/><div className="filters">{['all','rapid','blitz','bullet'].map(f=><button key={f} className={filter===f?'active':''} onClick={()=>{setFilter(f);setGamePage(0);}}>{f==='all'?'All games':f}</button>)}</div>
-    <div className="game-cards" ref={gameListRef} style={{"--game-grid-rows":Math.ceil(perPage/gameColumns),"--game-columns":gameColumns}}>{visibleGames.map(g=><button key={g.id} className={`game-card ${selected===g.id?'active':''}`} onClick={()=>{setReviewReturn('games');setSelected(g.id);setView('review');setScreen('summary');setLibrary(false);}}><span className={`result ${g.result}`}>{g.result==='win'?'1':g.result==='loss'?'0':'½'}</span><span className="game-details"><strong>{g.opponent}</strong><small>{g.timeClass} · {timeControl(g.timeControl)} · {date(g.ended)}</small></span><span className="saved-quality">{g.accuracy?`${g.accuracy[g.color]}%`:'→'}</span></button>)}{!visibleGames.length&&<p className="empty">{loading?'Loading games…':'No games found.'}</p>}</div><div className="library-pages"><button className="icon-button" aria-label="Previous games" disabled={page===0} onClick={()=>setGamePage(page-1)}><Icon name="left"/></button><span>{page+1} / {pageCount}</span><button className="icon-button" aria-label="More games" disabled={page===pageCount-1} onClick={()=>setGamePage(page+1)}><Icon name="right"/></button></div><div className="library-foot"><span className="status-dot"/>Private · Stockfish on your PC</div></aside>
+    <input className="search" aria-label="Search opponents" placeholder="Find an opponent…" value={search} onChange={e=>{setSearch(e.target.value);}}/><div className="filters">{['all','rapid','blitz','bullet'].map(f=><button key={f} className={filter===f?'active':''} onClick={()=>{setFilter(f);}}>{f==='all'?'All games':f}</button>)}</div>
+    <GamesList key={filter+':'+search} listKey={filter+':'+search} memory={gameListMemory} active={view==='games'} games={filtered} selected={selected} loading={loading} timeControl={timeControl} date={date} onSelect={g=>{setReviewReturn('games');setSelected(g.id);setView('review');setScreen('summary');setLibrary(false);}}/><div className="library-foot"><span className="status-dot"/>Private · Stockfish on your PC</div></aside>
     <main className={`main ${view!=="review"?`${view}-mode`:""}`}><div className="game-toolbar"><button className="icon-button" aria-label="Flip board" onClick={()=>setFlipped(f=>!f)}><Icon name="flip"/></button><span className={`result-label ${game?.result}`}>{game?.result}</span><button className="phone-button summary-link" onClick={()=>screen==='summary'?enter():setScreen('summary')}>{screen==='summary'?'Board':'Summary'}<Icon name="right" size={14}/></button>{game&&<a className="icon-button download" href={`api/games/${game.id}/pgn`} aria-label="Download game PGN" title="Download PGN"><Icon name="download"/></a>}</div>
     {error&&<div className="toast error" role="alert">{error}<button aria-label="Dismiss error" onClick={()=>setError('')}>×</button></div>}{notice&&<div className="toast" role="status">{notice}</div>}
     {practiceViews.map(practiceView=><div key={practiceView} className="practice-view" hidden={view!==practiceView} inert={view!==practiceView}><Puzzles active={view===practiceView} mode={practiceView==="learn"?"learn":"puzzles"} token={status?.token} onOpenGame={openInsight}/></div>)}

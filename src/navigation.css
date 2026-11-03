@@ -47,3 +47,10 @@
 .studio.view-review .game-toolbar>button[aria-label="Flip board"]{display:none}
 @media(min-width:901px){.app-navigation{height:44px;top:9px}.app-navigation button{min-height:44px}}
 @media(max-width:900px){.studio .review-navigation{display:grid}}
+
+/* Scroll the library independently, keeping search and navigation in reach. */
+.studio .game-cards.game-scroll{position:relative;display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr));grid-template-rows:none;grid-auto-rows:min-content;align-content:start;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;touch-action:pan-y;scrollbar-width:thin;scrollbar-color:#68864d transparent;outline-offset:-2px}
+.studio .game-scroll .game-card{min-height:76px;flex-shrink:0}
+.games-list-end{grid-column:1/-1;padding:14px 6px;text-align:center;font-size:12px;line-height:1.4;color:#92ab7f}
+@media(max-width:900px){.studio.view-games .library.open{grid-template-rows:52px 40px 36px 30px minmax(0,1fr)}.studio.view-games .game-cards.game-scroll{grid-template-rows:none}.studio.view-games .game-scroll .game-card{min-height:80px}}
+@media(max-width:900px) and (orientation:landscape){.studio.view-games .library.open{grid-template-rows:36px 34px 30px 27px minmax(0,1fr)}}
