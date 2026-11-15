@@ -40,10 +40,28 @@ function Summary({game,review,job,depth,setDepth,onAnalyze,onGrade,onEnter,index
   </section>;
 }
 function EvaluationChart({review,index,onMove}){return <div className="chart"><div className="chart-title"><span>GAME EVALUATION</span><span>White advantage ↑</span></div>{review?<div className="graph"><svg viewBox="0 0 600 50" preserveAspectRatio="none" aria-label="Evaluation through the game"><line x1="0" y1="25" x2="600" y2="25" stroke="#344335" strokeDasharray="3 5"/><polyline points={`0,25 ${review.rows.map((r,i)=>`${(i+1)/review.rows.length*600},${25-Math.tanh(r.whiteCp/450)*22}`).join(' ')}`} fill="none" stroke="#adcca2" strokeWidth="1.6"/>{index>=0&&<line x1={(index+1)/review.rows.length*600} x2={(index+1)/review.rows.length*600} y1="0" y2="50" stroke="#e5b974"/>}</svg><input type="range" min="-1" max={review.rows.length-1} value={index} aria-label="Explore game evaluation by move" onChange={e=>onMove(Number(e.target.value))}/></div>:<span className="chart-empty">Analyze to reveal the turning points.</span>}</div>;}
+const gamesViewKey='afterboard.gamesView.v1';
+const gameFilters=['all','rapid','blitz','bullet'];
+
+function readGamesView(){
+  try {
+    const saved=JSON.parse(localStorage.getItem(gamesViewKey));
+    if(saved&&gameFilters.includes(saved.filter)&&typeof saved.search==='string')return saved;
+  } catch {}
+  return {filter:'all',search:'',position:null};
+}
+
+function writeGamesView(filter,search,position){
+  try {
+    localStorage.setItem(gamesViewKey,JSON.stringify({filter,search,position}));
+  } catch {}
+}
+
 export default function Studio(){
   const [status,setStatus]=useState(null),[games,setGames]=useState([]),[selected,setSelected]=useState(null),[game,setGame]=useState(null),[review,setReview]=useState(null),[job,setJob]=useState(null);
   const [index,setIndex]=useState(-1),[flipped,setFlipped]=useState(false),[syncing,setSyncing]=useState(false),[loading,setLoading]=useState(true),[error,setError]=useState(''),[notice,setNotice]=useState('');
-  const [filter,setFilter]=useState('all'),[search,setSearch]=useState(''),[depth,setDepth]=useState(15),[playing,setPlaying]=useState(false),[library,setLibrary]=useState(true),[screen,setScreen]=useState('summary');
+  const [savedGamesView]=useState(readGamesView);
+  const [filter,setFilter]=useState(savedGamesView.filter),[search,setSearch]=useState(savedGamesView.search),[depth,setDepth]=useState(15),[playing,setPlaying]=useState(false),[library,setLibrary]=useState(true),[screen,setScreen]=useState('summary');
   const [view,setView]=useState('games');
   const [insightsRoute,setInsightsRoute]=useState({section:'Rating',entry:null}),[insightsVisited,setInsightsVisited]=useState(false),[reviewReturn,setReviewReturn]=useState('games');
   useEffect(()=>{if(view==='insights')setInsightsVisited(true);},[view]);
@@ -51,7 +69,11 @@ export default function Studio(){
   function backWithinInsights(){setInsightsRoute(route=>route.entry?{section:route.section,entry:route.entry.point&&route.entry.chartFocus?{control:route.entry.chartFocus}:null}:{section:route.section==='Explore'?'Rating':'Explore',entry:null});}
   const [practiceViews,setPracticeViews]=useState([]);
   useEffect(()=>{if(['puzzles','learn'].includes(view))setPracticeViews(visited=>visited.includes(view)?visited:[...visited,view]);},[view]);
-  const gameListMemory=useRef(new Map());
+  const listKey=filter+':'+search;
+  const gameListMemory=useRef(new Map([[savedGamesView.filter+':'+savedGamesView.search,savedGamesView.position]]));
+  useEffect(()=>{
+    writeGamesView(filter,search,gameListMemory.current.get(listKey)??null);
+  },[filter,search,listKey]);
   const selectedRef=useRef(null),tableRef=useRef(null),pendingInsightRef=useRef(null),revisionRef=useRef(null);
   const [moveRows,setMoveRows]=useState(8);
   useEffect(()=>{const element=tableRef.current;if(!element)return;const observer=new ResizeObserver(entries=>{const height=entries[0].contentRect.height;if(height>0)setMoveRows(Math.max(1,Math.min(8,Math.floor(height/24))));});observer.observe(element);return()=>observer.disconnect();},[]);
@@ -78,8 +100,8 @@ export default function Studio(){
   function openInsight(id,targetIndex=0,returnTo='games'){setReviewReturn(returnTo);setView('review');setLibrary(false);if(id===selected){go(targetIndex);setScreen(review||targetIndex>=0?'review':'summary');}else{pendingInsightRef.current={id,index:targetIndex};setSelected(id);}}
   const coachProps={row:current,review,index};
   return <div className={`studio screen-${screen} view-${view} ${view==='review'||view==='insights'&&insightsDrilled?'review-active':''}`}><aside className={`library ${library?'open':''}`} aria-label="Game library"><div className="library-title"><span className="eyebrow">GEORGE’S CHESS STUDIO</span><button className="icon-button close-library" aria-label="Close game library" onClick={()=>setLibrary(false)}><Icon name="close"/></button><h1>Game library <small>{games.length}</small></h1></div><button className="sync-button" disabled={syncing||!status} onClick={()=>syncGames()}><Icon name="refresh"/>{syncing?'Syncing…':'Sync latest games'}</button><span className="sync-note">chess.com / georgeatki {status?.lastSync&&`· ${date(new Date(status.lastSync).getTime()/1000)}`}</span>
-    <input className="search" aria-label="Search opponents" placeholder="Find an opponent…" value={search} onChange={e=>{setSearch(e.target.value);}}/><div className="filters">{['all','rapid','blitz','bullet'].map(f=><button key={f} className={filter===f?'active':''} onClick={()=>{setFilter(f);}}>{f==='all'?'All games':f}</button>)}</div>
-    <GamesList key={filter+':'+search} listKey={filter+':'+search} memory={gameListMemory} active={view==='games'} games={filtered} selected={selected} loading={loading} timeControl={timeControl} date={date} onSelect={g=>{setReviewReturn('games');setSelected(g.id);setView('review');setScreen('summary');setLibrary(false);}}/><div className="library-foot"><span className="status-dot"/>Private · Stockfish on your PC</div></aside>
+    <input className="search" aria-label="Search opponents" placeholder="Find an opponent…" value={search} onChange={e=>{setSearch(e.target.value);}}/><div className="filters">{gameFilters.map(f=><button key={f} className={filter===f?'active':''} onClick={()=>{setFilter(f);}}>{f==='all'?'All games':f}</button>)}</div>
+    <GamesList key={listKey} listKey={listKey} onRemember={position=>writeGamesView(filter,search,position)} memory={gameListMemory} active={view==='games'} games={filtered} selected={selected} loading={loading} timeControl={timeControl} date={date} onSelect={g=>{setReviewReturn('games');setSelected(g.id);setView('review');setScreen('summary');setLibrary(false);}}/><div className="library-foot"><span className="status-dot"/>Private · Stockfish on your PC</div></aside>
     <main className={`main ${view!=="review"?`${view}-mode`:""}`}><div className="game-toolbar"><button className="icon-button" aria-label="Flip board" onClick={()=>setFlipped(f=>!f)}><Icon name="flip"/></button><span className={`result-label ${game?.result}`}>{game?.result}</span><button className="phone-button summary-link" onClick={()=>screen==='summary'?enter():setScreen('summary')}>{screen==='summary'?'Board':'Summary'}<Icon name="right" size={14}/></button>{game&&<a className="icon-button download" href={`api/games/${game.id}/pgn`} aria-label="Download game PGN" title="Download PGN"><Icon name="download"/></a>}</div>
     {error&&<div className="toast error" role="alert">{error}<button aria-label="Dismiss error" onClick={()=>setError('')}>×</button></div>}{notice&&<div className="toast" role="status">{notice}</div>}
     {practiceViews.map(practiceView=><div key={practiceView} className="practice-view" hidden={view!==practiceView} inert={view!==practiceView}><Puzzles active={view===practiceView} mode={practiceView==="learn"?"learn":"puzzles"} token={status?.token} onOpenGame={openInsight}/></div>)}
