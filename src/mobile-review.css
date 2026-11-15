@@ -46,9 +46,19 @@
 }
 /* The full-width board and thumb controls stay fixed as coach text changes. */
 @media(max-width:900px) and (orientation:portrait){
-  .board-column{grid-template-rows:minmax(0,1fr) 23px calc(100vw - 16px) 23px 80px;gap:4px}
+  /* Focus can scroll the carousel, but must never drag the app shell sideways. */
+  .studio.view-review{overflow:clip}
+  .board-column{
+    /* Give the board its full width when it fits and reserve room for both control bars. */
+    --review-board-size: min(calc(100vw - 16px), max(0px, calc(100dvh - var(--mobile-menu-space) - 156px)));
+    grid-template-rows:minmax(0,1fr) 23px var(--review-board-size) 23px 80px;
+    gap:4px;
+  }
   .board-frame{align-items:stretch;margin-inline:-10px}
-  .board-and-eval{width:100%;height:100%}
+  .board-and-eval{width:min(100%,calc(var(--review-board-size) + 16px));height:100%}
+  /* Let the coach sit directly above the players without moving the board as text changes. */
+  .phone-coach{align-self:end;height:min(100%,90px)}
+  .phone-coach .coach-avatar{top:4px}
 }
 @media(max-width:900px) and (orientation:landscape){
   .board-column{grid-template-columns:minmax(190px,.85fr) minmax(0,1.3fr);grid-template-rows:20px minmax(0,1fr) 20px 72px;gap:3px 10px}
@@ -95,6 +105,13 @@
 .phone-coach{container-name:coach-space;container-type:size}
 @container coach-space (max-height:112px){
   .phone-coach .speech-bubble,.phone-coach .coach-avatar{display:none}
+}
+
+@media(max-width:900px) and (orientation:portrait){
+  @container coach-space (min-height:66px){
+    .phone-coach .speech-bubble{display:grid}
+    .phone-coach > .coach-avatar{display:grid;top:4px}
+  }
 }
 
 /* The played move carries its quality colour; suggestions use Best green. */
