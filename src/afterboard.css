@@ -316,15 +316,14 @@
     padding: var(--dock-padding);
     border: 1px solid #c3ccf044;
     border-radius: 24px;
-    background: #202739f2;
-    background: linear-gradient(145deg,#8e9bc448,#353b6527 46%,#8898ca31), #202739df;
-    box-shadow: inset 0 1px 0 #edf1ff49, inset 0 -1px 0 #090e2770, 0 6px 20px #05091c88;
+    background: #222b40f5;
+    box-shadow: inset 0 1px 0 #edf1ff5e, inset 0 -1px 0 #090e2760, 0 6px 24px #05091c55;
   }
   @supports (backdrop-filter: blur(12px)) or (-webkit-backdrop-filter: blur(12px)) {
     .studio .app-navigation {
-      background: linear-gradient(145deg,#9faadb3c,#353b6525 46%,#8898ca29), #222b42af;
-      -webkit-backdrop-filter: blur(16px) saturate(145%);
-      backdrop-filter: blur(16px) saturate(145%);
+      background: linear-gradient(155deg,#d8e2ff32,transparent 47%,#9aaeea20), #1b243876;
+      -webkit-backdrop-filter: blur(11px) saturate(160%) brightness(.83);
+      backdrop-filter: blur(11px) saturate(160%) brightness(.83);
     }
   }
   .studio .app-navigation button {
@@ -332,7 +331,8 @@
     border: 0;
     border-radius: 18px;
     background: transparent;
-    color: #d7deee;
+    color: #eef2ff;
+    text-shadow: 0 1px 3px #090f26bb;
     font-size: 11px;
     gap: 4px;
     z-index: 1;
@@ -343,13 +343,17 @@
     display: block;
     position: absolute;
     pointer-events: none;
-    inset: var(--dock-padding) auto var(--dock-padding) var(--dock-padding);
+    inset: calc(var(--dock-padding) + 2px) auto calc(var(--dock-padding) + 2px) var(--dock-padding);
     width: calc((100% - 2 * var(--dock-padding))/4);
-    border-radius: 17px;
-    background: linear-gradient(150deg,#ffe3b632,#c7c8fc14);
-    box-shadow: inset 0 1px #ffe8c450, inset 0 0 0 1px #f1d8bd20;
+    border-radius: 16px;
+    background: linear-gradient(155deg,#fff1d651,#e3e5ff16 58%,#b6c6ff27);
+    box-shadow: inset 0 1px #fff7e78a, inset 0 -1px #c6d3ff32, 0 2px 7px #0d13274d;
   }
-  .nav-selection-moving { transition: transform 220ms var(--ease-out); }
+  .nav-selection-moving { transition: transform 285ms var(--ease-drawer); }
+
+  /* The list moves behind the dock. Its bottom padding keeps the last game reachable. */
+  .studio.view-games .library.open { bottom: 0; padding-bottom: 0; }
+  .studio.view-games .game-scroll { padding-bottom: var(--mobile-menu-space); }
   .studio .review-navigation {
     max-width: 440px;
     margin-inline: auto;
@@ -361,6 +365,9 @@
   .studio .review-navigation button { min-height: 44px; flex-direction: row; gap: 8px; }
   .studio .review-navigation button + button { border-left: 1px solid #bac6eb21; }
   .studio .review-navigation svg { width: 19px; height: 19px; }
+  @media (hover: hover) and (pointer: fine) {
+    .studio .app-navigation button:hover:not(:disabled) { background: #c5d3ff16; }
+  }
   .studio.screen-summary .review-panel { background: var(--surface); border-radius: 14px; }
   .studio.view-games .search { font-size: 16px; }
   .studio .phone-coach .speech-bubble { background: var(--surface); border-color: var(--line); }
