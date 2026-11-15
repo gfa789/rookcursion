@@ -12,7 +12,7 @@ export default function StudyDesk({game,move,total,loading,onReview,onPractice})
   return (
     <section className="study-desk" aria-labelledby="desk-title" data-enter>
       <header className="desk-intro">
-        <p className="desk-label">Afterboard</p>
+        <p className="desk-label desk-mobile-brand">Afterboard</p>
         <h1 id="desk-title">The chess study desk</h1>
         <p>{loading?'Loading your game library':`${total.toLocaleString('en-GB')} games in your library`}</p>
       </header>

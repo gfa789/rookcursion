@@ -282,3 +282,98 @@
 @media (max-width: 900px) {
   .studio.view-games .game-toolbar > .preview-review { display: none; }
 }
+
+.studio .board { border-radius: 4px; box-shadow: 0 0 0 1px #322a28, 0 8px 22px #35262428; }
+.studio .board .light { background: #f0e1ca; }
+.studio .board .dark { background: #916e59; }
+.studio .board .dark :is(.rank,.file) { color: #fff6e6; }
+.studio .board :is(.rank,.file) { font-weight: 700; }
+.studio .chess-piece {
+  width: 83%;
+  height: 88%;
+  max-width: 100%;
+  max-height: 100%;
+  flex: none;
+  pointer-events: none;
+  --piece-fill: #fffaed;
+  --piece-edge: #392923;
+  --piece-detail: #6b5547;
+  filter: drop-shadow(0 1px 1px #24171348);
+}
+.studio .chess-piece[data-piece-color=b] {
+  --piece-fill: #2b2325;
+  --piece-edge: #f5cba682;
+  --piece-detail: #bd9e87;
+}
+.studio .piece-body { fill: var(--piece-fill); stroke: var(--piece-edge); }
+.studio .piece-engraving { stroke: var(--piece-detail); }
+.studio .avatar .chess-piece { width: 76%; height: 88%; }
+
+.rail-brand { display: none; }
+.studio .desk-actions button { border-radius: 12px; font-size: 13px; }
+.studio .desk-secondary { background: var(--raised); border-color: var(--line); }
+.studio .desk-intro > * { width: fit-content; margin-inline: auto; }
+.studio .main > .game-toolbar[hidden] { display: none; }
+@media (hover: hover) and (pointer: fine) {
+  .studio .move-navigation > .icon-button.next:hover:not(:disabled) {
+    background: #a70956;
+    color: white;
+    border-color: transparent;
+  }
+}
+.studio .coach-top > strong.book { color: #71513a; }
+.studio .coach-top > strong:is(.best,.excellent,.good) { color: #3c5a2d; }
+.studio .coach-top > strong.brilliant { color: #226761; }
+.studio .coach-top > strong:is(.inaccuracy,.mistake) { color: #83521c; }
+.studio .coach-top > strong.blunder { color: #973f35; }
+@media (min-width: 901px) {
+  .studio {
+    --rail-width: 164px;
+    --game-library-width: clamp(245px,21vw,324px);
+    grid-template-columns: var(--rail-width) minmax(0,1fr);
+  }
+  .studio.view-games { grid-template-columns: var(--rail-width) var(--game-library-width) minmax(0,1fr); }
+  .studio .main { grid-column: 2; padding-inline: clamp(22px,3vw,44px); }
+  .studio.view-games .main { grid-column: 3; }
+  .studio.view-games .library { grid-column: 2; grid-row: 1; }
+  .studio .app-navigation:not(.review-navigation) {
+    position: relative;
+    inset: auto;
+    z-index: 35;
+    grid-column: 1;
+    grid-row: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 5px;
+    height: 100%;
+    padding: 19px 12px;
+    border-right: 1px solid var(--line);
+    background: var(--surface);
+  }
+  .studio .rail-brand {
+    display: block;
+    font-family: var(--font-display);
+    font-size: 20px;
+    font-weight: 650;
+    letter-spacing: -.06em;
+    padding: 5px 8px 16px;
+    border-bottom: 1px solid var(--line);
+    margin-bottom: 9px;
+  }
+  .studio .app-navigation button { min-height: 44px; border-radius: 12px; }
+  .studio .app-navigation:not(.review-navigation) button { justify-content: flex-start; gap: 11px; }
+  .studio .app-navigation button[aria-current=location] {
+    background: var(--raised);
+    border-color: var(--line);
+    color: var(--accent);
+  }
+  .studio .review-navigation { left: calc(var(--rail-width) + clamp(22px,3vw,44px)); }
+  .studio.view-desk .main { padding-block: 20px; }
+  .desk-mobile-brand { display: none; }
+}
+@media (min-width: 901px) and (max-width: 1150px) {
+  .studio { --rail-width: 144px; }
+  .studio.view-games { grid-template-columns: var(--rail-width) minmax(0,1fr); }
+  .studio.view-games .main { display: none; }
+}
