@@ -85,7 +85,7 @@ function compareReviewedGames(reviewed){
 }
 
 function studyTrends(facts,openings,granularity){
-  const featured=new Set(openings.slice(0,12).map(o=>JSON.stringify([o.name,o.color])));
+  const featured=new Set(openings.map(o=>JSON.stringify([o.name,o.color])));
   const buckets=new Map();
   for(const fact of facts){
     const date=timeBucket(fact.ended,granularity);

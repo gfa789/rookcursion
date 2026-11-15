@@ -404,3 +404,7 @@
 @media(prefers-reduced-motion:reduce){
   .studio .rail-selection.nav-selection-moving { transition: none; }
 }
+
+.draggable-board { touch-action:none; user-select:none; }
+.draggable-board [data-square]:has(.chess-piece) { cursor:grab; }
+.board-drag-piece { position:absolute; z-index:10; top:0; left:0; width:12.5%; height:12.5%; display:grid; place-items:center; pointer-events:none; }

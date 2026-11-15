@@ -66,14 +66,22 @@ export default function Puzzles({token,onOpenGame,mode='puzzles',active=true,ini
       }else{setMessage('Not quite. Try again.');setSelected(null);setBusy(false);}
     }catch(e){if(version===generation.current){setError(e.message);setBusy(false);}}finally{if(version===generation.current)setPromotion(null);}
   }
+  function tryMove(from,to){
+    if(busy||result||promotion||!board)return false;
+    const moves=board.moves({square:from,verbose:true}).filter(move=>move.to===to);
+    if(!moves.length)return false;
+    if(moves.some(move=>move.promotion))setPromotion({from,to});
+    else submit({move:from+to});
+    return true;
+  }
   function choose(square){
-    if(busy||result||!board)return;
-    const piece=board.get(square);
+    if(busy||result||promotion||!board)return;
     if(selected===square){setSelected(null);return;}
-    if(selected){const moves=board.moves({square:selected,verbose:true}).filter(m=>m.to===square);
-      if(moves.length){if(moves.some(m=>m.promotion)){setPromotion({from:selected,to:square});return;}submit({move:selected+square});return;}
-    }
-    setSelected(piece?.color===puzzle.color?square:null);
+    if(selected&&tryMove(selected,square))return;
+    setSelected(board.get(square)?.color===puzzle.color?square:null);
+  }
+  function drop(from,to){
+    if(!tryMove(from,to))setSelected(null);
   }
   async function next(){
     if(busy)return;
@@ -85,7 +93,7 @@ export default function Puzzles({token,onOpenGame,mode='puzzles',active=true,ini
     <header className="practice-heading"><h1>{mode==='learn'?'Opening practice':'Tactical practice'}</h1></header>
     <section className="puzzle-idea" aria-label="Move idea"><div className="idea-heading"><strong title={mode==='learn'?puzzle?.opening:undefined}>{mode==='learn'?(puzzle?.openingFamily||'Your openings'):targeted?theme:'The idea'}</strong><span role="status" aria-live="polite">{result?`${result.correct?'Solved':'Solution'} · ${result.line[lineIndex]||''}`:message||(puzzle?`${puzzle.color==='w'?'White':'Black'} to move`:'Preparing…')}</span></div><Idea text={result?(result.ideas?.[lineIndex]||result.explanation):(idea||'Preparing a position from your games…')}/></section>
     {(error||meta?.error)&&<div className="puzzle-error" role="alert">{error||meta.error}<button onClick={()=>setRound(n=>n+1)}>Retry</button></div>}
-    {puzzle?<><div className="puzzle-board-slot"><div className="puzzle-board-wrap"><Board fen={shown} flipped={puzzle.color==='b'} onSquare={result?undefined:choose} selected={selected} targets={targets} played={result?.pv[lineIndex]||played}/>{promotion&&<div className="puzzle-promotion" role="dialog" aria-label="Choose promotion"><strong>Promote to</strong>{[['q','Queen'],['r','Rook'],['b','Bishop'],['n','Knight']].map(([p,label])=><button key={p} onClick={()=>submit({move:promotion.from+promotion.to+p})}>{label}</button>)}<button onClick={()=>setPromotion(null)}>Cancel</button></div>}</div></div>
+    {puzzle?<><div className="puzzle-board-slot"><div className="puzzle-board-wrap"><Board fen={shown} flipped={puzzle.color==='b'} onSquare={result?undefined:choose} onDrop={busy||result||promotion?undefined:drop} selected={selected} targets={targets} played={result?.pv[lineIndex]||played}/>{promotion&&<div className="puzzle-promotion" role="dialog" aria-label="Choose promotion"><strong>Promote to</strong>{[['q','Queen'],['r','Rook'],['b','Bishop'],['n','Knight']].map(([p,label])=><button key={p} onClick={()=>submit({move:promotion.from+promotion.to+p})}>{label}</button>)}<button onClick={()=>setPromotion(null)}>Cancel</button></div>}</div></div>
       <nav className="puzzle-actions" aria-label={mode==='learn'?'Lesson controls':'Puzzle controls'}>{result?<><button aria-label="Previous solution position" disabled={lineIndex===0} onClick={()=>setLineIndex(n=>n-1)}><ControlIcon name="left"/><span>Prev move</span></button><button aria-label="Next solution position" disabled={lineIndex>=result.pv.length-1} onClick={()=>setLineIndex(n=>n+1)}><ControlIcon name="right"/><span>Next move</span></button><button ref={openSheet} aria-label="Practice options" onClick={()=>setSheet('filters')}><ControlIcon name="options"/><span>Options</span></button><button className="puzzle-next" onClick={next} aria-label={mode==='learn'?'Next lesson':'Next puzzle'}><ControlIcon name="next"/><span>{mode==='learn'?'Next lesson':'Next puzzle'}</span></button></>:<><button disabled={busy||!session} onClick={()=>submit({action:'hint'})}><ControlIcon name="hint"/><span>Hint</span></button><button disabled={busy||!session} onClick={()=>submit({action:'reveal'})}><ControlIcon name="reveal"/><span>Reveal</span></button><button ref={openSheet} disabled={busy} aria-label="Practice options" onClick={()=>setSheet('filters')}><ControlIcon name="options"/><span>Options</span></button><button className="puzzle-next" onClick={next} disabled={busy}><ControlIcon name="next"/><span>Skip</span></button></>}</nav></>:<div className="puzzle-empty"><span aria-hidden="true">♞</span><h2>{meta?.generating?(mode==='learn'?'Preparing opening lessons…':'Preparing puzzles…'):meta?.waiting?'You’re up to date.':meta&&!meta.generating?(mode==='learn'?'No matching lesson yet.':'No matching puzzle yet.'):'Finding your next puzzle…'}</h2><button onClick={()=>setSheet('filters')}>Change filters</button><button onClick={()=>{setExclude('');setRound(n=>n+1);}}>Try again</button></div>}
     {sheet&&<div className="puzzle-overlay" onClick={dismiss}><section className="puzzle-sheet" role="dialog" aria-modal="true" aria-label="Practice options" onClick={e=>e.stopPropagation()} onKeyDown={e=>{if(e.key==='Escape')dismiss();if(e.key==='Tab'){const nodes=[...e.currentTarget.querySelectorAll('button:not(:disabled),select')],first=nodes[0],last=nodes.at(-1);if(e.shiftKey&&document.activeElement===first){e.preventDefault();last?.focus();}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first?.focus();}}}}><header><h2>{mode==='learn'?'Your openings':'Practice options'}</h2><button ref={closeSheet} aria-label="Close puzzle panel" onClick={dismiss}>×</button></header>{<><div className="puzzle-scopes" aria-label="Puzzle time control">{['all','rapid','blitz','bullet'].map(s=><button key={s} aria-pressed={scope===s} onClick={()=>{setScope(s);setTheme('all');setExclude('');}}>{s==='all'?'All games':s}</button>)}</div><label>{mode==='learn'?'Opening':'Weakness'}<select aria-label={mode==='learn'?'Practice opening':'Practice weakness'} value={theme} onChange={e=>{setTheme(e.target.value);setExclude('');}}><option value="all">{mode==='learn'?'All your openings':'Mixed weaknesses'}</option>{meta?.themes.map(t=><option key={t.name} value={t.name}>{t.name}</option>)}</select></label><button className="puzzle-next" onClick={dismiss}>Back to board</button></>}{result&&<button onClick={()=>onOpenGame(result.gameId,result.index)}>Original game vs {puzzle.opponent} ↗</button>}</section></div>}
   </section>;

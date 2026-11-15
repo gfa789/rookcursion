@@ -65,13 +65,31 @@ export async function sequencePuzzle(puzzle,engine){
   return {...puzzle,solution:steps[0].solution,steps,sequenceVersion:2};
 }
 
+const reviewIntervals=[1,3,7,14,30];
+const retryDelay=10*60000;
+
+export function practiceSchedule(previous,outcome,now){
+  const next={misses:0,cleanReviews:0,streak:0,due:0,...previous};
+  if(outcome==='miss')next.misses++;
+  if(outcome==='clean'){
+    next.cleanReviews++;
+    next.streak++;
+    next.due=now+reviewIntervals[Math.min(next.streak-1,reviewIntervals.length-1)]*86400000;
+  }else{
+    next.streak=0;
+    next.due=now+retryDelay;
+  }
+  return next;
+}
+
 export class PuzzleService{
   constructor({db,engine}){
     this.db=db;this.engine=engine;this.generating=false;this.checked=0;this.error=null;this.lastGenerated=new Map();this.sessionLocks=new Set();this.lessonCache=new Map();
     db.exec(`CREATE TABLE IF NOT EXISTS puzzles(id TEXT PRIMARY KEY,body TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS puzzle_checks(id TEXT PRIMARY KEY);
       CREATE TABLE IF NOT EXISTS puzzle_sessions(id TEXT PRIMARY KEY,puzzleId TEXT NOT NULL,body TEXT NOT NULL);
-      CREATE TABLE IF NOT EXISTS puzzle_progress(id TEXT PRIMARY KEY,attempts INTEGER DEFAULT 0,solved INTEGER DEFAULT 0,assisted INTEGER DEFAULT 0,last INTEGER DEFAULT 0,due INTEGER DEFAULT 0);`);
+      CREATE TABLE IF NOT EXISTS puzzle_progress(id TEXT PRIMARY KEY,attempts INTEGER DEFAULT 0,solved INTEGER DEFAULT 0,assisted INTEGER DEFAULT 0,last INTEGER DEFAULT 0,due INTEGER DEFAULT 0);
+      CREATE TABLE IF NOT EXISTS puzzle_spacing(id TEXT PRIMARY KEY,misses INTEGER NOT NULL,cleanReviews INTEGER NOT NULL,streak INTEGER NOT NULL,due INTEGER NOT NULL);`);
   }
   recent(scope='all'){
     return this.db.prepare(`SELECT g.body game,r.body review FROM games g JOIN reviews r ON r.id=g.id ${scope==='all'?'':"WHERE json_extract(g.body,'$.timeClass')=?"} ORDER BY g.ended DESC LIMIT 80`).all(...(scope==='all'?[]:[scope])).map(r=>({game:JSON.parse(r.game),review:JSON.parse(r.review)}));
@@ -83,7 +101,7 @@ export class PuzzleService{
     const result=openingLessons(records);if(this.lessonCache.size>8)this.lessonCache.clear();this.lessonCache.set(key,result);return result;
   }
   pool(scope='all',mode='puzzles'){
-    return this.db.prepare('SELECT p.body,s.attempts,s.solved,s.assisted,s.last,s.due FROM puzzles p LEFT JOIN puzzle_progress s ON s.id=p.id').all().map(r=>({...r,puzzle:JSON.parse(r.body)})).filter(r=>r.puzzle.sequenceVersion===2&&(mode==='learn'?r.puzzle.kind==='opening':r.puzzle.kind!=='opening')&&(scope==='all'||r.puzzle.timeClass===scope));
+    return this.db.prepare('SELECT p.body,s.attempts,s.solved,s.assisted,s.last,COALESCE(q.due,s.due) due,COALESCE(q.misses,0) misses FROM puzzles p LEFT JOIN puzzle_progress s ON s.id=p.id LEFT JOIN puzzle_spacing q ON q.id=p.id').all().map(r=>({...r,puzzle:JSON.parse(r.body)})).filter(r=>r.puzzle.sequenceVersion===2&&(mode==='learn'?r.puzzle.kind==='opening':r.puzzle.kind!=='opening')&&(scope==='all'||r.puzzle.timeClass===scope));
   }
   async generate(scope,mode='puzzles',theme='all'){
     const generationKey=`${mode}:${scope}:${theme}`;
@@ -108,10 +126,37 @@ export class PuzzleService{
     this.generate(scope,mode,theme).catch(()=>{});
     const recent=mode==='learn'?null:this.recent(scope),sample=mode==='learn'?this.lessons(scope):puzzleCandidates(recent),{themes}=sample,pool=this.pool(scope,mode),now=Date.now();
     const options=pool.filter(r=>(theme==='all'||r.puzzle.theme===theme)&&r.puzzle.id!==exclude);
-    // Unsolved / previously missed positions first; successful ones return in a week.
-    options.sort((a,b)=>Number((a.due||0)>now)-Number((b.due||0)>now)||(a.last||0)-(b.last||0)||b.puzzle.ended-a.puzzle.ended);
-    const selected=options.find(r=>!r.due||r.due<=now);
+    const due=options.filter(r=>!r.due||r.due<=now);
+    // Due positions with prior misses come before fresh material.
+    due.sort((a,b)=>Number(b.misses>0)-Number(a.misses>0)||Number(!!b.due)-Number(!!a.due)||(a.due||0)-(b.due||0)||b.puzzle.ended-a.puzzle.ended);
+    const selected=due[0];
     return {puzzle:selected?publicPuzzle(selected.puzzle):null,themes,stats:{available:pool.length,solved:pool.filter(r=>r.solved).length,clean:pool.filter(r=>r.solved&&!r.assisted&&r.attempts===1).length},generating:this.generating,checked:this.checked,error:this.error,reviewedGames:recent?.length??sample.reviewedGames,waiting:!!options.length&&!selected};
+  }
+  recordSpacing(id,outcome){
+    const previous=this.db.prepare('SELECT misses,cleanReviews,streak,due FROM puzzle_spacing WHERE id=?').get(id);
+    if(outcome==='skip'&&!previous)return;
+    const next=outcome==='skip'?{...previous,due:Date.now()+retryDelay}:practiceSchedule(previous,outcome,Date.now());
+    this.db.prepare('INSERT OR REPLACE INTO puzzle_spacing VALUES (?,?,?,?,?)').run(id,next.misses,next.cleanReviews,next.streak,next.due);
+    return next;
+  }
+  practiceSummary(scope,now=Date.now()){
+    const rows=this.db.prepare(`SELECT q.*,json_extract(p.body,'$.theme') theme FROM puzzle_spacing q
+      JOIN puzzles p ON p.id=q.id WHERE json_extract(p.body,'$.kind') IS NOT 'opening'
+      AND (?='all' OR json_extract(p.body,'$.timeClass')=?)`).all(scope,scope);
+    const byTheme=Object.create(null);
+    const total={tracked:0,due:0,repeat:0,steady:0,cleanReviews:0,nextDue:null};
+    for(const row of rows){
+      const summary=byTheme[row.theme]??={...total,tracked:0,due:0,repeat:0,steady:0,cleanReviews:0,nextDue:null};
+      for(const item of [total,summary]){
+        item.tracked++;
+        item.due+=Number(row.due<=now);
+        item.repeat+=Number(row.misses>=2&&row.streak<2);
+        item.steady+=Number(row.streak>=2);
+        item.cleanReviews+=row.cleanReviews;
+        if(row.due>now)item.nextDue=Math.min(item.nextDue??Infinity,row.due);
+      }
+    }
+    return {total,byTheme};
   }
   progress(id){return this.db.prepare('SELECT * FROM puzzle_progress WHERE id=?').get(id)||{id,attempts:0,solved:0,assisted:0,last:0,due:0};}
   save(p){this.db.prepare('INSERT OR REPLACE INTO puzzle_progress VALUES (?,?,?,?,?,?)').run(p.id,p.attempts,p.solved,p.assisted,p.last,p.due);}
@@ -131,7 +176,7 @@ export class PuzzleService{
     }
     const p=this.progress(id);
     if(p.last&&p.due<=Date.now()){p.attempts=0;p.solved=0;p.assisted=0;}
-    if(action==='skip'){if(!p.solved){p.last=Date.now();p.due=p.last+10*60000;this.save(p);}return {skipped:true};}
+    if(action==='skip'){const schedule=this.recordSpacing(id,'skip');if(schedule||!p.solved){p.last=Date.now();p.due=p.last+10*60000;this.save(p);}return {skipped:true};}
     const record=this.db.prepare('SELECT body FROM puzzle_sessions WHERE id=? AND puzzleId=?').get(String(sessionId||''),id);
     if(!record)return {error:'Start this puzzle again to continue.',status:409};
     const session=JSON.parse(record.body);
@@ -155,7 +200,7 @@ export class PuzzleService{
       correct=(current.mate>0?afterEval.mate!==null&&afterEval.mate<=0:cp>=current.cp-60&&expectedScore(current.cp)-expectedScore(cp)<=.025);
     }
     p.attempts=Math.max(1,p.attempts);p.last=Date.now();p.due=p.last+10*60000;
-    if(!correct&&!reveal){p.attempts++;session.mistakes++;this.save(p);this.saveSession(session);return {correct:false,complete:false,message:'Not quite. Try again.'};}
+    if(!correct&&!reveal){p.attempts++;session.mistakes++;this.recordSpacing(id,'miss');this.save(p);this.saveSession(session);return {correct:false,complete:false,message:'Not quite. Try again.'};}
     if(reveal){
       p.assisted=1;session.assisted=true;
       for(let n=session.step;n<puzzle.steps.length;n++){
@@ -174,7 +219,9 @@ export class PuzzleService{
       if(!session.complete){this.save(p);this.saveSession(session);return {correct:true,complete:false,playerFen,playerMove:move,reply,replySan,fen:session.fen,completedMoves:session.step,totalMoves:puzzle.steps.length,explanation};}
       p.solved=1;p.assisted=Number(!!p.assisted||session.assisted);p.due=!p.assisted&&p.attempts===1?p.last+7*86400000:p.last+10*60000;
     }
-    session.result={correct:!reveal,complete:true,assisted:!!p.assisted,fen:session.fen,completedMoves:session.step,totalMoves:puzzle.steps.length,pv:session.played,line:session.sans,ideas:session.ideas,explanation:puzzle.steps[0].explanation,originalSan:puzzle.originalSan,originalExplanation:puzzle.originalExplanation,gameId:puzzle.gameId,index:puzzle.index};
+    const schedule=this.recordSpacing(id,!reveal&&!session.assisted&&!session.mistakes?'clean':'retry');
+    p.due=schedule.due;
+    session.result={correct:!reveal,nextDue:schedule.due,complete:true,assisted:!!p.assisted,fen:session.fen,completedMoves:session.step,totalMoves:puzzle.steps.length,pv:session.played,line:session.sans,ideas:session.ideas,explanation:puzzle.steps[0].explanation,originalSan:puzzle.originalSan,originalExplanation:puzzle.originalExplanation,gameId:puzzle.gameId,index:puzzle.index};
     this.save(p);this.saveSession(session);return session.result;
   }
 }

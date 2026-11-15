@@ -63,7 +63,7 @@ app.get('/api/insights',(req,res)=>{
   const range=['all','ytd','90d','month'].includes(req.query.range)?req.query.range:'all',now=Date.now();
   const cacheKey=`${scope}:${range}:${pipeline.revision}:${Math.floor(now/60000)}`;let data=insightCache.get(cacheKey);
   if(!data){const facts=db.prepare('SELECT body FROM insight_facts').all().map(row=>JSON.parse(row.body));data=aggregateInsights(facts,scope,{range,now});if(insightCache.size>16)insightCache.clear();insightCache.set(cacheKey,data);}
-  res.json({...data,pipeline,generatedAt:new Date().toISOString()});
+  res.json({...data,practice:puzzles.practiceSummary(scope,now),pipeline,generatedAt:new Date().toISOString()});
 });
 app.post('/api/background',(req,res)=>{
   if(typeof req.body.paused==='boolean')background.setPaused(req.body.paused);

@@ -5,18 +5,7 @@ const SCOPES=['all','rapid','blitz','bullet'];
 const PERIODS=[['all','All time','All recorded games'],['ytd','YTD','Since 1 January'],['90d','90 days','The last 90 days'],['month','Last month','From the same date last month']];
 const colours={rapid:'#a52a5b',blitz:'#8c4d14',bullet:'#236985',daily:'#486e45'};
 const fmt=n=>n===null||n===undefined?'—':Number(n).toLocaleString('en-GB');
-const pct=n=>n===null||n===undefined?'—':`${n}%`;
 const date=n=>n?new Date(n*1000).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric',timeZone:'Europe/London'}):'—';
-async function request(path,token,body,signal){const response=await fetch(`api/${path}`,body===undefined?{signal}:{method:'POST',headers:{'Content-Type':'application/json','X-Review-Token':token},body:JSON.stringify(body),signal});const data=await response.json();if(!response.ok)throw new Error(data.error||'Unable to load insights.');return data;}
-function Arrow({back=false}){return <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d={back?'m14 5-7 7 7 7':'m10 5 7 7-7 7'}/></svg>;}
-function OutcomeBar({counts}){const total=counts.win+counts.draw+counts.loss||1;return <div className="outcome-bar" aria-label={`${counts.win} wins, ${counts.draw} draws, ${counts.loss} losses`}><i className="won" style={{width:`${counts.win/total*100}%`}}/><i className="drawn" style={{width:`${counts.draw/total*100}%`}}/><i className="lost" style={{width:`${counts.loss/total*100}%`}}/></div>;}
-function InfiniteList({items,renderItem,memory,listKey,label}){
-  const saved=memory.current.get(listKey),[limit,setLimit]=useState(saved?.limit||20),ref=useRef(null),sentinel=useRef(null);
-  useLayoutEffect(()=>{if(ref.current)ref.current.scrollTop=saved?.top||0;},[]);
-  useEffect(()=>{const root=ref.current,node=sentinel.current;if(!root||!node||limit>=items.length)return;const observer=new IntersectionObserver(([entry])=>{if(entry.isIntersecting)setLimit(n=>Math.min(items.length,n+20));},{root,rootMargin:'160px'});observer.observe(node);return()=>observer.disconnect();},[limit,items.length]);
-  useLayoutEffect(()=>{memory.current.set(listKey,{limit,top:ref.current?.scrollTop||0});},[limit,listKey,memory]);
-  return <div className="insight-list infinite-list" ref={ref} role="region" aria-label={label} tabIndex={0} onScroll={e=>memory.current.set(listKey,{limit,top:e.currentTarget.scrollTop})}>{items.slice(0,limit).map(renderItem)}<div ref={sentinel} className="list-end" role="status">{limit<items.length?'Loading more...':items.length?`${items.length} ${label.toLowerCase()} · all shown`:'Nothing to show in this period'}</div></div>;
-}
 function RatingChart({ratings,period,focus,onFocus,onReset,onPoint,active}){
   const ref=useRef(null),[size,setSize]=useState({width:640,height:240});
   useEffect(()=>{const node=ref.current;if(!node)return;const observer=new ResizeObserver(([entry])=>{const {width,height}=entry.contentRect;if(width>0&&height>0)setSize({width:Math.round(width),height:Math.round(height)});});observer.observe(node);return()=>observer.disconnect();},[]);
@@ -55,44 +44,99 @@ function RatingChart({ratings,period,focus,onFocus,onReset,onPoint,active}){
       onPointerUp={e=>{if(consumed.current)seekRating(e);ratingGesture.current=null;}}
       onPointerLeave={()=>{ratingGesture.current=null;}}
       onPointerCancel={()=>{ratingGesture.current=null;}}>{[0,.5,1].map(t=><g key={t}><line x1={left} x2={right} y1={top+t*(bottom-top)} y2={top+t*(bottom-top)} stroke="var(--line)" strokeDasharray="3 5"/><text x="0" y={top+4+t*(bottom-top)}>{fmt(Math.round(max-(max-min)*t))}</text></g>)}{first!==last&&<line x1={left+cursor*(right-left)} x2={left+cursor*(right-left)} y1={top} y2={bottom} stroke="var(--accent)" opacity=".55"/>}{series.map(r=><g key={r.control}><polyline points={r.points.map(p=>`${x(p)},${y(p)}`).join(' ')} fill="none" stroke={colours[r.control]} strokeWidth="2.4" vectorEffect="non-scaling-stroke"/>{r.points.map((p,i)=><g key={p.ended+':'+i} role="button" tabIndex={0} aria-label={`${r.control}, ${date(p.ended)}, rating ${p.rating}, ${p.games?.length||0} ${(p.games?.length||0)===1?'game':'games'}. Open games`} onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();onPoint(r.control,p);}}}><circle className="rating-hit" cx={x(p)} cy={y(p)} r="12" fill="transparent"/><circle className="rating-dot" cx={x(p)} cy={y(p)} r="3" fill={colours[r.control]} pointerEvents="none"/></g>)}</g>)}{first===last?<text x={(left+right)/2} y={h-5} textAnchor="middle">{axisDate(first)}</text>:<><text x={left} y={h-5}>{axisDate(first)}</text><text x={right} y={h-5} textAnchor="end">{axisDate(last)}</text></>}</svg>:<div className="insight-empty"><strong>No rated games in this period</strong><button className="insight-action" onClick={onReset}>Show all time</button></div>}</div>
-    {!!series.length&&<div className={`rating-legend ${focus?'focused':''}`}>{series.map(r=><button key={r.control} style={{'--series-colour':colours[r.control]}} onClick={()=>onFocus(r.control)} aria-label={`${r.control} rating ${fmt(r.current)}, change ${r.change>=0?'+':''}${r.change}. Open rating details`}><span><i/>{r.control}</span><strong>{fmt(r.current)}</strong><small className={r.change<0?'negative':''}>{r.change>=0?'+':''}{fmt(r.change)}</small></button>)}</div>}
+    {!!series.length&&<div className={`rating-legend ${focus?'focused':''}`}>{series.map(r=><button key={r.control} style={{'--series-colour':colours[r.control]}} onClick={()=>onFocus(r.control)} aria-label={`${r.control} rating ${fmt(r.current)}, change ${r.change>=0?'+':''}${r.change}. Filter rating series`}><span><i/>{r.control}</span><strong>{fmt(r.current)}</strong><small className={r.change<0?'negative':''}>{r.change>=0?'+':''}{fmt(r.change)}</small></button>)}</div>}
     {focus&&series[0]&&<div className="rating-details"><div><span>Period start</span><b>{fmt(series[0].start)}</b></div><div><span>Period peak</span><b>{fmt(series[0].peak)}</b></div><div><span>Rated games</span><b>{fmt(series[0].games)}</b></div></div>}
     {!!points.length&&<p className="chart-note">{period.bucket==='month'?'Monthly':period.bucket==='week'?'Weekly':'Daily'} checkpoints · tap to see games or swipe to seek</p>}
   </section>;
 }
-export default function Insights({token,onOpenGame,onDrill,route,onRouteChange,onBack,active=true}){
-  const [scope,setScope]=useState('all'),[range,setRange]=useState('all'),[data,setData]=useState(null),[error,setError]=useState(''),[busy,setBusy]=useState(false),[ranking,setRanking]=useState('Most played'),[pipelineTab,setPipelineTab]=useState('Analysis'),[overviewTab,setOverviewTab]=useState('Results');
-  const activeRef=useRef(active),refreshRef=useRef(null),{section,entry}=route;
-  const listMemory=useRef(new Map());
-  const panelRef=useRef(null),dashboardTop=useRef(0);
-  const dashboard=section==='Rating'&&!entry;
+const SECTIONS=['Overall','Openings','Patterns'];
+const openingKey=opening=>JSON.stringify([opening.name,opening.color]);
+
+export default function Insights({active=true,onOpenGame,onDrill}){
+  const [section,setSection]=useState('Overall'),[scope,setScope]=useState('all'),[range,setRange]=useState('all');
+  const [data,setData]=useState(null),[error,setError]=useState(''),[reload,setReload]=useState(0);
+  const [openingChoice,setOpeningChoice]=useState(null),[patternChoice,setPatternChoice]=useState(null);
+  const [ratingFocus,setRatingFocus]=useState(null),[ratingPoint,setRatingPoint]=useState(null);
+  const content=useRef(null),sectionPositions=useRef(new Map());
+  useEffect(()=>{
+    if(!active)return;
+    const controller=new AbortController();
+    let pending=false;
+    async function refresh(){
+      if(pending)return;
+      pending=true;
+      try{
+        const response=await fetch(`api/insights?${new URLSearchParams({scope,range})}`,{signal:controller.signal});
+        if(!response.ok)throw new Error('Could not load your insights.');
+        const result=await response.json();
+        if(!controller.signal.aborted){setData(result);setError('');}
+      }catch(error){
+        if(!controller.signal.aborted)setError(error.message);
+      }finally{pending=false;}
+    }
+    refresh();
+    const timer=setInterval(refresh,15000);
+    return()=>{controller.abort();clearInterval(timer);};
+  },[scope,range,active,reload]);
   useLayoutEffect(()=>{
-    if(dashboard&&panelRef.current)panelRef.current.scrollTop=dashboardTop.current;
-  },[dashboard,active]);
-  const listKey=[scope,range,section,entry?.name||entry?.control||'list',entry?.point?.ended||'',entry?.color||'',ranking].join(':');
-  const scrollList=(items,renderItem,label,suffix='')=><InfiniteList key={listKey+suffix} listKey={listKey+suffix} memory={listMemory} items={items} renderItem={renderItem} label={label}/>;
-  useEffect(()=>{activeRef.current=active;if(active)refreshRef.current?.();},[active]);
-  useEffect(()=>{const controller=new AbortController();let inFlight=false;setData(null);const refresh=async()=>{if(inFlight||!activeRef.current)return;inFlight=true;try{const next=await request(`insights?${new URLSearchParams({scope,range})}`,undefined,undefined,controller.signal);if(!controller.signal.aborted){setData(next);setError('');}}catch(e){if(!controller.signal.aborted)setError(e.message);}finally{inFlight=false;}};refreshRef.current=refresh;refresh();const timer=setInterval(refresh,15000);return()=>{controller.abort();clearInterval(timer);if(refreshRef.current===refresh)refreshRef.current=null;};},[scope,range]);
-  const url=`insights?${new URLSearchParams({scope,range})}`;
-  async function command(body){setBusy(true);try{await request('background',token,body);setData(await request(url));setError('');}catch(e){setError(e.message);}finally{setBusy(false);}}
-  async function sync(){setBusy(true);try{await request('sync',token,{});setData(await request(url));setError('');}catch(e){setError(e.message);}finally{setBusy(false);}}
-  function filter(key,value){if(key==='scope')setScope(value);else setRange(value);if(entry){if(section==='Rating')onRouteChange({section,entry:key==='scope'&&value==='all'?null:{control:key==='scope'?value:entry.control}});else if(section!=='Rating')onRouteChange({section,entry:null});}}
-  const fresh=data?.scope===scope&&data?.period?.key===range?data:null,pipeline=data?.pipeline;
-  const opening=entry&&section==='Openings'?fresh?.openings.find(o=>o.name===entry.name&&o.color===entry.color):null;
-  const pattern=entry&&section==='Mistakes'?fresh?.patterns.find(p=>p.name===entry.name):null;
-  const openingRows=fresh?(ranking==='Strongest'?fresh.bestOpenings:ranking==='Needs work'?fresh.worstOpenings:fresh.openings):[];
-  const title=section==='Rating'?(entry?`${entry.control[0].toUpperCase()+entry.control.slice(1)} rating`:'Study insights'):section==='Explore'?'Explore insights':entry?.name||section;
-  const isGlobal=section==='Background',filters=section!=='Explore'&&!isGlobal;
-  const examples=opening?.examples||pattern?.examples||[];
-  const selectedPoint=entry?.point,pointGames=selectedPoint?.games||[];
-  return <section ref={panelRef} className={`insights-panel ${dashboard?'insights-scroll-page':''}`} aria-label="Chess insights dashboard" onScroll={e=>{if(dashboard)dashboardTop.current=e.currentTarget.scrollTop;}}>
-    <header className="insights-heading">{(section!=='Rating'||entry)&&<button className="insight-back" aria-label="Back within insights" onClick={onBack}><Arrow back/></button>}<h1 title={title}>{title}</h1>{section==='Rating'&&!entry&&<span>{fmt(fresh?.total)} games</span>}</header>
-    {filters&&<div className="insight-filters"><div className="insight-scopes" aria-label="Insights time control">{SCOPES.map(s=><button key={s} aria-pressed={scope===s} disabled={busy} onClick={()=>filter('scope',s)}>{s==='all'?'All games':s}</button>)}</div><div className="insight-periods" aria-label="Insights date range">{PERIODS.map(([key,label,description])=><button key={key} title={description} aria-label={key==='90d'?'Last 90 days':label} aria-pressed={range===key} disabled={busy} onClick={()=>filter('range',key)}>{label}</button>)}</div></div>}
-    {error&&<div className="insight-error" role="alert">{error}</div>}
-    <div className={`insight-content insight-${section.toLowerCase()} ${entry?'is-detail':''}`}>
-      {!fresh?<div className="insight-empty">Preparing your insights…</div>:section==='Rating'&&selectedPoint?<section className="insight-card checkpoint-card"><div className="checkpoint-summary"><span>{date(selectedPoint.ended)} · {entry.control}</span><strong>{fmt(selectedPoint.rating)} <small>rating</small></strong><p>{pointGames.length} rated {pointGames.length===1?'game':'games'} · {selectedPoint.anchor?'First recorded game':fresh.period.bucket==='month'?'Calendar month':fresh.period.bucket==='week'?'Week from':'Day of'} {selectedPoint.anchor?date(selectedPoint.ended):new Date(selectedPoint.date+(selectedPoint.date.length===7?'-01':'')+'T00:00:00Z').toLocaleDateString('en-GB',{month:'short',year:'numeric',...(fresh.period.bucket==='month'?{}:{day:'numeric'}),timeZone:'UTC'})}</p></div>{scrollList([...pointGames].reverse(),g=><button className="example-row" key={g.id} onClick={()=>onOpenGame(g.id,-1)}><div><strong>vs {g.opponent}</strong><span>{date(g.ended)} · {g.result} · {fmt(g.rating)} rating{g.reviewed?'':' · analysis on request'}</span></div><Arrow/></button>,'Games')}</section>:section==='Rating'?<>{dashboard&&<h2 className="ratings-title">Rating trajectory</h2>}<RatingChart active={active} ratings={fresh.ratings} period={fresh.period} focus={entry?.control} onFocus={control=>onRouteChange({section:'Rating',entry:{control}})} onReset={()=>filter('range','all')} onPoint={(control,point)=>onRouteChange({section:'Rating',entry:{control,point,chartFocus:entry?.control||null}})}/>{dashboard&&<StudyTrends data={fresh} active={active} onDrill={theme=>onDrill(scope,theme)} onOpenGame={onOpenGame} onRepertoire={()=>onRouteChange({section:'Openings',entry:null})}/>}</>:section==='Explore'?<div className="insight-section-grid">{[['Overview','Results & study focus',`${fmt(fresh.total)} games in this period`,'◴'],['Openings','Your opening repertoire',`${fmt(fresh.openings.length)} opening / colour pairs`,'♙'],['Mistakes','Patterns to work on',`${fmt(fresh.reviewed)} reviewed games`,'?!'],['Background','Import & analysis','Automatic study progress','↻']].map(([key,label,subtitle,icon])=><button key={key} onClick={()=>onRouteChange({section:key,entry:null})}><span className="section-icon" aria-hidden="true">{icon}</span><strong>{label}</strong><small>{subtitle}</small><Arrow/></button>)}</div>:entry&&(section==='Openings'||section==='Mistakes')?<section className="insight-card detail-card"><div className="detail-summary">{opening?<><div className="detail-heading"><strong>{opening.color==='w'?'As White':'As Black'}</strong><span>{fmt(opening.games)} games · {fmt(opening.reviewed)} reviewed</span></div><OutcomeBar counts={opening}/><div className="detail-metrics"><div><span>Result score</span><b>{pct(opening.score)}</b></div><div><span>Move quality</span><b>{pct(opening.quality)}</b></div></div></>:pattern?<><div className="detail-metrics"><div><span>Occurrences</span><b>{fmt(pattern.count)}</b></div><div><span>Per 100 moves</span><b>{fmt(pattern.per100)}</b></div></div><p className="insight-copy">Average expected-score loss: {pattern.impact} points.</p></>:<div className="insight-empty">No matching data in this period.</div>}</div><div className="examples-panel"><h2 className="examples-heading">Study your games</h2>{scrollList(examples,e=><button className="example-row" key={e.id+':'+(e.index??0)} onClick={()=>onOpenGame(e.id,e.index??0)}><div><strong>{e.san?`${e.san} · ${e.classification}`:`vs ${e.opponent}`}</strong><span>{e.san?`vs ${e.opponent}`:date(e.ended)}{e.bestSan?` · better: ${e.bestSan}`:''}</span></div><Arrow/></button>,'Games')}</div></section>:section==='Openings'?<section className="insight-card opening-card"><div className="card-heading"><h2>Your repertoire</h2><select aria-label="Opening ranking" value={ranking} onChange={e=>setRanking(e.target.value)}>{['Most played','Strongest','Needs work'].map(r=><option key={r}>{r}</option>)}</select></div><p className="insight-copy">{ranking==='Most played'?'By opening family and colour.':'Result score · minimum 5 games per colour.'}</p>{scrollList(openingRows,o=><button className="opening-row" key={o.name+o.color} onClick={()=>onRouteChange({section:'Openings',entry:{name:o.name,color:o.color}})}><div className="opening-info"><strong>{o.name}</strong><span>{o.color==='w'?'White':'Black'} · {fmt(o.games)} games</span><OutcomeBar counts={o}/></div><div className="opening-score"><b>{pct(o.score)}</b><span>result score</span></div><Arrow/></button>,'Openings')}</section>:section==='Mistakes'?<section className="insight-card mistakes-card"><div className="card-heading"><h2>Your recurring patterns</h2></div><p className="insight-copy">{fmt(fresh.ownMoves)} moves · {fmt(fresh.reviewed)} reviewed games</p>{scrollList(fresh.patterns,p=><button className="pattern-row" key={p.name} onClick={()=>onRouteChange({section:'Mistakes',entry:{name:p.name}})}><div><strong>{p.name}</strong><span>{p.per100} per 100 moves</span></div><b>{fmt(p.count)}</b><Arrow/></button>,'Patterns')}<div className="phase-chips">{fresh.phases.map(p=><span key={p.name}>{p.name}<b>{pct(p.errorRate)}</b></span>)}</div></section>:section==='Overview'?<><div className="overview-switch">{['Results','Study focus'].map(t=><button key={t} aria-pressed={overviewTab===t} onClick={()=>setOverviewTab(t)}>{t}</button>)}</div><div className="overview-panels" data-overview-tab={overviewTab}><section className="insight-card results-card"><h2>Results & form</h2><div className="overview-score"><strong>{pct(fresh.score)}</strong><span>Result score · {fmt(fresh.total)} games</span></div><OutcomeBar counts={fresh.counts}/><div className="result-totals"><span>{fmt(fresh.counts.win)} wins</span><span>{fmt(fresh.counts.draw)} draws</span><span>{fmt(fresh.counts.loss)} losses</span></div><div className="colour-results">{['w','b'].map(c=><div key={c}><span>{c==='w'?'As White':'As Black'}</span><b>{fresh.colours[c].games?pct(Math.round((fresh.colours[c].win+fresh.colours[c].draw*.5)/fresh.colours[c].games*100)):'—'}</b><small>{fmt(fresh.colours[c].games)} games</small></div>)}</div><p className="insight-copy">Last {fresh.recent.games} games: {pct(fresh.recent.score)} · reviewed quality {pct(fresh.quality)}</p></section><section className="insight-card focus-card"><h2>Study focus</h2>{scrollList(fresh.highlights,(highlight,i)=><article className="focus-copy" key={highlight.title+':'+i}><h3>{highlight.title}</h3><p>{highlight.body}</p>{highlight.example?.id&&<button className="insight-action" onClick={()=>onOpenGame(highlight.example.id,highlight.example.index??0)}>Study an example <Arrow/></button>}</article>,'Study ideas','focus')}</section></div></>:<section className="insight-card pipeline-card"><div className="pipeline-tabs">{['Analysis','History'].map(t=><button key={t} aria-pressed={pipelineTab===t} onClick={()=>setPipelineTab(t)}>{t==='Analysis'?'Analysis queue':'History import'}</button>)}</div>{pipelineTab==='History'?<><h2>{fmt(pipeline.total)} games imported</h2><p className="insight-copy">{pipeline.archives.completed} / {pipeline.archives.total} monthly archives</p><progress max={Math.max(1,pipeline.archives.total)} value={pipeline.archives.completed}/><div className="pipeline-numbers"><span>Reviewed<b>{fmt(pipeline.reviewed)}</b></span><span>Waiting<b>{fmt(pipeline.queued)}</b></span><span>Retry<b>{fmt(pipeline.failed)}</b></span></div><button className="insight-action" disabled={busy} onClick={sync}>Check for new games</button></>:<><h2>{pipeline.paused?'Analysis paused':pipeline.active?'Studying a game…':pipeline.queued?'Waiting for the next game':'Up to date'}</h2><p className="insight-copy">{pipeline.active?`vs ${pipeline.active.opponent} · ${pipeline.active.completed} / ${pipeline.active.total||'?'} moves`:'Recent games and requested reviews go first.'}</p><progress max="100" value={pipeline.active?.percent||0}/><div className="pipeline-actions"><button className="insight-action" disabled={busy} onClick={()=>command({paused:!pipeline.paused})}>{pipeline.paused?'Resume analysis':'Pause analysis'}</button>{pipeline.failed>0&&<button className="insight-action" disabled={busy} onClick={()=>command({retryFailed:true})}>Retry failed games</button>}</div></>}{pipeline.error&&<p className="insight-error">{pipeline.error}</p>}<p className="insight-copy pipeline-note">Global queue · checks for new games every 5 minutes while the server is running.</p></section>}
+    if(active&&content.current)content.current.scrollTop=sectionPositions.current.get(section)||0;
+  },[section,active]);
+  const fresh=data?.scope===scope&&data?.period.key===range?data:null;
+  const openings=fresh?.openings??[];
+  const patterns=fresh?.patterns??[];
+  const opening=openings.find(item=>openingKey(item)===openingChoice)??openings[0];
+  const pattern=patterns.find(item=>item.name===patternChoice)??patterns[0];
+  const focusedRatings=fresh?.ratings.filter(r=>!ratingFocus||r.control===ratingFocus)??[];
+  const latest=focusedRatings.flatMap(r=>r.points.slice(-1).map(point=>({control:r.control,point})))
+    .reduce((best,current)=>!best||current.point.ended>best.point.ended?current:best,null);
+  const ratingSelection=ratingPoint??latest;
+  function chooseFilter(setter,value){
+    setter(value);setRatingPoint(null);setRatingFocus(null);setError('');
+  }
+  function chooseSection(next){
+    if(content.current)sectionPositions.current.set(section,content.current.scrollTop);
+    setSection(next);
+  }
+  return <section className="insights-panel study-insights" aria-label="Chess insights dashboard">
+    <aside className="study-sidebar" aria-label="Insights sidebar">
+      <nav aria-label="Insights sections">
+        {SECTIONS.map(name=><button key={name} aria-current={section===name?'page':undefined} onClick={()=>chooseSection(name)}>{name}</button>)}
+      </nav>
+      {section==='Openings'&&openings.length>0&&<div className="study-sidebar-picker" aria-label="Opening family">
+        {openings.map(item=><button key={openingKey(item)} aria-pressed={item===opening} onClick={()=>setOpeningChoice(openingKey(item))}>
+          <strong>{item.name}</strong><small>{item.color==='w'?'White':'Black'} · {fmt(item.games)} games</small>
+        </button>)}
+      </div>}
+      {section==='Patterns'&&patterns.length>0&&<div className="study-sidebar-picker" aria-label="Mistake pattern">
+        {patterns.map(item=><button key={item.name} aria-pressed={item===pattern} onClick={()=>setPatternChoice(item.name)}>
+          <strong>{item.name}</strong><small>{fresh.practice?.byTheme[item.name]?.due??0} due</small>
+        </button>)}
+      </div>}
+    </aside>
+    <div className="study-insights-content" ref={content} onScroll={event=>sectionPositions.current.set(section,event.currentTarget.scrollTop)}>
+      <header className="insights-heading"><h1>{section==='Overall'?'Study insights':section}</h1>{fresh&&<span>{fmt(fresh.total)} games</span>}</header>
+      <div className="insight-filters">
+        <div className="insight-scopes" aria-label="Insights time control">{SCOPES.map(s=><button key={s} aria-pressed={scope===s} onClick={()=>chooseFilter(setScope,s)}>{s==='all'?'All games':s}</button>)}</div>
+        <div className="insight-periods" aria-label="Insights date range">{PERIODS.map(([key,label,description])=><button key={key} title={description} aria-pressed={range===key} onClick={()=>chooseFilter(setRange,key)}>{label}</button>)}</div>
+      </div>
+      {error&&<div className="insight-error" role="alert">{error} <button className="insight-action" onClick={()=>setReload(n=>n+1)}>Retry</button></div>}
+      {!fresh&&!error&&<p role="status">Loading insights…</p>}
+      {fresh&&<>
+        {section==='Overall'&&<section className="study-ratings">
+          <h2>Rating trajectory</h2>
+          <RatingChart active={active} ratings={fresh.ratings} period={fresh.period} focus={ratingFocus}
+            onFocus={control=>{setRatingFocus(ratingFocus===control?null:control);setRatingPoint(null);}}
+            onReset={()=>chooseFilter(setRange,'all')} onPoint={(control,point)=>setRatingPoint({control,point})}/>
+          {ratingSelection&&<div className="trend-examples rating-sources">
+            <h3>{ratingSelection.control} · {fmt(ratingSelection.point.rating)} · {date(ratingSelection.point.ended)}</h3>
+            {[...(ratingSelection.point.games??[])].reverse().slice(0,3).map(game=><button key={game.id} onClick={()=>onOpenGame(game.id,-1)}>
+              vs {game.opponent} <span aria-hidden="true">↗</span>
+            </button>)}
+          </div>}
+        </section>}
+        <StudyTrends key={`${scope}:${range}:${section}`} data={fresh} active={active} section={section} opening={opening}
+          pattern={pattern} onOpenGame={onOpenGame} onDrill={name=>onDrill(scope,name)}/>
+      </>}
     </div>
-    {section==='Rating'&&!entry&&<button className="insight-explore" onClick={()=>onRouteChange({section:'Explore',entry:null})}><span>More reports and analysis status</span><Arrow/></button>}
-    <footer className="insight-footer">{isGlobal?'Background progress covers all games':fresh?(fresh.total?`${date(fresh.first)} — ${date(fresh.last)} · ${fmt(fresh.reviewed)} / ${fmt(fresh.total)} reviewed`:'No games in selected period'):'Loading selected period…'}</footer>
   </section>;
 }

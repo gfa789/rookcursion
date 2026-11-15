@@ -131,16 +131,11 @@ function TrendChart({title,description,dates,series,unit,sample,details,fixedMax
   </section>;
 }
 
-export default function StudyTrends({data,onOpenGame,onRepertoire,onDrill,active}){
+export default function StudyTrends({data,section,opening,pattern:theme,onOpenGame,onDrill,active}){
   const buckets=data.trends??[];
   const dates=buckets.map(bucket=>bucket.date);
-  const [themeChoice,setTheme]=useState(null);
-  const [openingChoice,setOpening]=useState(null);
-  const openings=data.openings.slice(0,12);
   const openingKey=o=>JSON.stringify([o.name,o.color]);
   const openingName=o=>o.name+(o.color==='w'?' as White':' as Black');
-  const opening=openings.find(o=>openingKey(o)===openingChoice)??openings[0];
-  const theme=data.patterns.find(p=>p.name===themeChoice)??data.patterns[0];
   const phaseSeries=phases.map(name=>({name,points:buckets.map(bucket=>{
     const phase=bucket.phases[name];
     return phase?{count:phase.errors,total:phase.moves}:null;
@@ -157,46 +152,42 @@ export default function StudyTrends({data,onOpenGame,onRepertoire,onDrill,active
   const resolution={month:'Monthly',week:'Weekly',day:'Daily'}[data.period.bucket];
   const common={dates,active,onOpenGame};
   return <div className="study-trends">
+    {section==='Overall'&&<PracticeProgress stats={data.practice?.total} onDrill={()=>onDrill('all')}/>}
+    {section==='Patterns'&&<PracticeProgress name={theme?.name} stats={theme&&data.practice?.byTheme[theme.name]} onDrill={theme&&(()=>onDrill(theme.name))}/>}
     <p className="trend-coverage">{resolution} samples · {coverage}. Gaps indicate no sample.</p>
-    <Comparison comparison={data.comparison} themes={data.patterns} opening={opening} onDrill={onDrill}/>
-    <div className="study-trend-grid">
-      <TrendChart {...common} title="Mistakes by phase" description="Inaccuracies, mistakes, and blunders per 100 reviewed moves in each phase."
-        series={phaseSeries} unit="" sample={p=>`${p.count} of ${p.total} moves`}
-        sources={buckets.map(bucket=>bucket.sources?.reviewed)}/>
-      <div className="trend-group">
-        {theme&&<label className="trend-select">Mistake pattern
-          <select value={theme.name} onChange={e=>setTheme(e.target.value)}>
-            {data.patterns.map(p=><option key={p.name}>{p.name}</option>)}
-          </select>
-        </label>}
-        <TrendChart {...common} title="Recurring mistakes" description="Occurrences per 100 reviewed moves."
-          series={themeSeries} unit="" sample={p=>`${p.count} in ${p.total} moves`}
-          sources={buckets.map(bucket=>bucket.sources?.themes[theme?.name])}
-          details={theme&&<button className="insight-action" onClick={()=>onDrill(theme.name)}>Drill this mistake</button>}/>
-      </div>
-      <div className="opening-explorer">
-        <aside className="insight-card opening-rail" aria-label="Opening explorer">
-          <h2>Opening explorer</h2>
-          <div className="opening-rail-list">
-            {openings.map(o=><button key={openingKey(o)} aria-pressed={o===opening} onClick={()=>setOpening(openingKey(o))}>
-              <strong>{o.name}</strong><small>{o.color==='w'?'White':'Black'} · {o.games} games</small>
-            </button>)}
-          </div>
-          <button className="insight-action" onClick={onRepertoire}>Full repertoire</button>
-        </aside>
-        <TrendChart {...common} title={opening?openingName(opening):'Opening results and errors'}
-          description="Game score and errors per 100 reviewed opening moves. A win is one point and a draw is half."
-          series={openingSeries} unit="%" fixedMaximum={100} sources={buckets.map(bucket=>opening&&bucket.sources?.openings[openingKey(opening)])}/>
-      </div>
-    </div>
+    {section==='Overall'&&<TrendChart {...common} title="Mistakes by phase" description="Inaccuracies, mistakes, and blunders per 100 reviewed moves in each phase."
+      series={phaseSeries} unit="" sample={p=>`${p.count} of ${p.total} moves`}
+      sources={buckets.map(bucket=>bucket.sources?.reviewed)}/>}
+    {section==='Patterns'&&<TrendChart key={theme?.name} {...common} title={theme?.name??'Recurring mistakes'} description="Occurrences per 100 reviewed moves."
+      series={themeSeries} unit="" sample={p=>`${p.count} in ${p.total} moves`}
+      sources={buckets.map(bucket=>bucket.sources?.themes[theme?.name])}/>}
+    {section==='Openings'&&<TrendChart key={opening&&openingKey(opening)} {...common} title={opening?openingName(opening):'Opening results and errors'}
+      description="Game score and errors per 100 reviewed opening moves."
+      series={openingSeries} unit="%" fixedMaximum={100} sources={buckets.map(bucket=>opening&&bucket.sources?.openings[openingKey(opening)])}/>}
+    <Comparison comparison={data.comparison} section={section} themes={theme?[theme]:[]} opening={section==='Openings'?opening:null}/>
   </div>;
 }
 
-function Comparison({comparison,themes,opening,onDrill}){
-  if(!comparison)return null;
+function PracticeProgress({stats,name,onDrill}){
+  const {tracked=0,due=0,repeat=0,steady=0,cleanReviews=0,nextDue}=stats??{};
+  return <section className="insight-card practice-progress">
+    <h2>{name?'Practice progress':'Spaced practice'}</h2>
+    {tracked>0?<><dl>
+      <div><dt>Due now</dt><dd>{due}</dd></div>
+      <div><dt>Repeated misses</dt><dd>{repeat}</dd></div>
+      <div><dt>Two clean solves in a row</dt><dd>{steady}</dd></div>
+      <div><dt>Clean solves</dt><dd>{cleanReviews}</dd></div>
+    </dl><p>{tracked} positions tracked.{nextDue&&!due?` Next review ${new Date(nextDue).toLocaleString('en-GB',{dateStyle:'medium',timeStyle:'short'})}.`:''}</p></>
+    :<p>Practice a mistake to start tracking it here.</p>}
+    {onDrill&&<button className="insight-action" onClick={onDrill}>{due?'Review due positions':name?'Drill this mistake':'Practice mistakes'}</button>}
+  </section>;
+}
+
+function Comparison({comparison,section,themes,opening}){
+  if(!comparison||(section==='Openings'&&!opening)||(section==='Patterns'&&!themes.length))return null;
   const {recent,previous}=comparison;
   const measure=(count,total)=>total?100*count/total:null;
-  const rows=phases.map(name=>({
+  const rows=(section==='Overall'?phases:[]).map(name=>({
     label:name,...Object.fromEntries([['recent',recent],['previous',previous]].map(([key,w])=>{
       const phase=w.phases[name];return [key,phase?measure(phase.errors,phase.moves):null];
     })),
@@ -212,9 +203,9 @@ function Comparison({comparison,themes,opening,onDrill}){
   return <section className="insight-card windows-card">
     <h2>Last 100 vs previous 100</h2>
     <p>Reviewed games for the selected time control across all dates. Rates are pooled per 100 reviewed moves.</p>
-    <table><thead><tr><th scope="col">Mistake rate</th><th scope="col">Previous<br/><small>{windowDates(previous)}<br/>{previous.games} games · {number.format(previous.moves)} moves</small></th><th scope="col">Latest<br/><small>{windowDates(recent)}<br/>{recent.games} games · {number.format(recent.moves)} moves</small></th></tr></thead>
-      <tbody>{rows.map(row=><tr key={row.label}><th scope="row">{row.theme?<button onClick={()=>onDrill(row.theme)}>{row.label} <span aria-hidden="true">↗</span></button>:row.label}</th><td>{print(row.previous)}</td><td>{print(row.recent)}</td></tr>)}</tbody>
-    </table>
+    {rows.length>0&&<table><thead><tr><th scope="col">Mistake rate</th><th scope="col">Previous<br/><small>{windowDates(previous)}<br/>{previous.games} games · {number.format(previous.moves)} moves</small></th><th scope="col">Latest<br/><small>{windowDates(recent)}<br/>{recent.games} games · {number.format(recent.moves)} moves</small></th></tr></thead>
+      <tbody>{rows.map(row=><tr key={row.label}><th scope="row">{row.label}</th><td>{print(row.previous)}</td><td>{print(row.recent)}</td></tr>)}</tbody>
+    </table>}
     {(recent.games<100||previous.games<100)&&<p>Fewer than 200 reviewed games. Treat the comparison as provisional.</p>}
     {opening&&<p><strong>{opening.name} as {opening.color==='w'?'White':'Black'}</strong> · {sampleEnough?
       `Result score ${print(measure(openingWindows[0].score,openingWindows[0].games))}% → ${print(measure(openingWindows[1].score,openingWindows[1].games))}% and opening errors per 100 moves ${print(measure(openingWindows[0].errors,openingWindows[0].moves))} → ${print(measure(openingWindows[1].errors,openingWindows[1].moves))} (${openingWindows[0].games} → ${openingWindows[1].games} games).`:

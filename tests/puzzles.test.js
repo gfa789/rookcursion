@@ -29,7 +29,7 @@ test('a puzzle is solved only after all three player moves and automatic replies
   const first=await s.answer(p.id,{sessionId,step:0,move:pv[0]});assert.equal(first.complete,false);assert.equal(first.reply,pv[1]);assert.equal(first.completedMoves,1);assert.equal(s.progress(p.id).solved,0);assert.equal(first.pv,undefined);
   const duplicate=await s.answer(p.id,{sessionId,step:0,move:pv[0]});assert.equal(duplicate.status,409);
   const second=await s.answer(p.id,{sessionId,step:1,move:pv[2]});assert.equal(second.complete,false);assert.equal(second.reply,pv[3]);
-  const done=await s.answer(p.id,{sessionId,step:2,move:pv[4]});assert.equal(done.complete,true);assert.equal(done.correct,true);assert.equal(s.progress(p.id).solved,1);assert.equal(s.progress(p.id).attempts,1);assert.ok(s.progress(p.id).due>Date.now()+6*86400000);assert.deepEqual(done.pv,pv.slice(0,5));
+  const done=await s.answer(p.id,{sessionId,step:2,move:pv[4]});assert.equal(done.complete,true);assert.equal(done.correct,true);assert.equal(s.progress(p.id).solved,1);assert.equal(s.progress(p.id).attempts,1);assert.ok(s.progress(p.id).due>Date.now()+23*3600000);assert.deepEqual(done.pv,pv.slice(0,5));
   assert.deepEqual(await s.answer(p.id,{sessionId,step:2,move:pv[4]}),done);s.db.close();
 });
 test('later hints refer to the current position and assisted sequences are not clean',async()=>{
@@ -66,4 +66,31 @@ test('Learn uses opening mistakes from history, keeps its pool separate and refr
 });
 test('real Stockfish MultiPV searches preserve subsequent game-review searches',async()=>{
   const engine=new Engine();try{const result=await engine.evaluateMulti(fen,14);assert.equal(result.length,2);assert.equal(result[0].best,'c3d5');assert.ok(result[0].depth>=14);const single=await engine.evaluate(new Chess().fen(),8);assert.equal(single.depth,8);}finally{engine.close();}
+});
+
+test('repeat misses persist and due positions outrank fresh puzzles until two clean reviews',async()=>{
+  const s=service(),p=await seed(s),theme=p.theme;
+  const fresh={...p,id:'newer',ended:p.ended+1};
+  s.db.prepare('INSERT INTO puzzles VALUES (?,?)').run(fresh.id,JSON.stringify(fresh));
+  for(let i=0;i<2;i++){
+    const sessionId=await start(s,p);
+    assert.equal((await s.answer(p.id,{sessionId,step:0,move:'c3b5'})).correct,false);
+  }
+  assert.equal(s.practiceSummary('rapid').byTheme[theme].repeat,1);
+  assert.equal(s.practiceSummary('bullet').total.tracked,0);
+  assert.equal(s.next({scope:'rapid',theme}).puzzle.id,fresh.id);
+  for(let i=0;i<2;i++){
+    s.db.prepare('UPDATE puzzle_spacing SET due=0 WHERE id=?').run(p.id);
+    assert.equal(s.practiceSummary('rapid').total.due,1);
+    assert.equal(s.next({scope:'rapid',theme}).puzzle.id,p.id);
+    const sessionId=await start(s,p);
+    for(let step=0;step<3;step++)await s.answer(p.id,{sessionId,step,move:pv[step*2]});
+  }
+  const progress=s.practiceSummary('rapid').byTheme[theme];
+  assert.equal(progress.repeat,0);
+  assert.equal(progress.steady,1);
+  assert.equal(progress.cleanReviews,2);
+  assert.ok(progress.nextDue>Date.now()+2*86400000);
+  await new Promise(resolve=>setImmediate(resolve));
+  s.db.close();
 });

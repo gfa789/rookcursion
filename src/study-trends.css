@@ -67,3 +67,34 @@
   .opening-explorer .opening-rail-list { max-height: 145px; }
 }
 .rating-plot svg { touch-action: pan-y; }
+
+/* A fixed study rail and a single scrolling reading column. */
+.studio .study-insights { display:grid; grid-template-columns:minmax(165px,200px) minmax(0,1fr); gap:18px; }
+.study-sidebar { min-height:0; min-width:0; display:flex; flex-direction:column; gap:14px; border-right:1px solid var(--line); padding-right:12px; }
+.study-sidebar nav,.study-sidebar-picker { display:grid; gap:4px; }
+.study-sidebar-picker { min-height:0; overflow:auto; align-content:start; }
+.study-sidebar button { min-height:44px; padding:8px 10px; border-radius:8px; background:transparent; text-align:left; overflow-wrap:anywhere; transition:background-color 150ms ease; }
+.study-sidebar button[aria-current],.study-sidebar button[aria-pressed=true] { background:var(--raised); color:var(--accent); }
+.study-sidebar button small { display:block; color:var(--muted); font-size:11px; margin-top:3px; }
+.study-insights-content { min-width:0; min-height:0; overflow-y:auto; overflow-x:hidden; overscroll-behavior:contain; padding:0 8px 18px 0; }
+.study-insights-content > * + * { margin-top:14px; }
+.study-ratings h2 { font-size:18px; margin:0 0 10px; }
+.study-ratings .rating-plot { flex:none; height:clamp(175px,30vh,280px); }
+.rating-sources { margin-top:10px; }
+.study-insights .study-trends > * + * { margin-top:14px; }
+.practice-progress dl { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:8px; margin:0; }
+.practice-progress dl div { padding:8px; background:var(--raised); border-radius:8px; }
+.practice-progress dt,.practice-progress p { color:var(--muted); font-size:12px; }
+.practice-progress p { margin:0; }
+.practice-progress dd { font-size:22px; margin:4px 0 0; font-variant-numeric:tabular-nums; }
+@media(hover:hover) { .study-sidebar button:hover { background-color:var(--hover); } }
+@media(max-width:760px){
+  .studio .study-insights { grid-template-columns:minmax(0,1fr); grid-template-rows:auto minmax(0,1fr); gap:8px; }
+  .study-sidebar { padding:0 0 6px; border-right:none; border-bottom:1px solid var(--line); gap:4px; }
+  .study-sidebar nav { grid-template-columns:repeat(3,minmax(0,1fr)); }
+  .study-sidebar nav button { text-align:center; }
+  .study-sidebar-picker { grid-template-columns:repeat(2,minmax(0,1fr)); max-height:108px; }
+  .study-insights-content { padding-right:3px; }
+  .practice-progress dl { grid-template-columns:repeat(2,minmax(0,1fr)); }
+}
+@media(prefers-reduced-motion:reduce){.study-sidebar button{transition:none;}}
