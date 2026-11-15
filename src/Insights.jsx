@@ -2,7 +2,7 @@ import React,{useEffect,useLayoutEffect,useRef,useState} from 'react';
 import './insights.css';
 const SCOPES=['all','rapid','blitz','bullet'];
 const PERIODS=[['all','All time','All recorded games'],['ytd','YTD','Since 1 January'],['90d','90 days','The last 90 days'],['month','Last month','From the same date last month']];
-const colours={rapid:'#c8adf4',blitz:'#f5ba77',bullet:'#79c9dc',daily:'#df91ad'};
+const colours={rapid:'#a52a5b',blitz:'#8c4d14',bullet:'#236985',daily:'#486e45'};
 const fmt=n=>n===null||n===undefined?'—':Number(n).toLocaleString('en-GB');
 const pct=n=>n===null||n===undefined?'—':`${n}%`;
 const date=n=>n?new Date(n*1000).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric',timeZone:'Europe/London'}):'—';

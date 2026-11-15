@@ -116,16 +116,7 @@
 .studio .status-dot { background: #a5d9c5; }
 
 .studio .game-toolbar { border-color: var(--line); }
-.studio.view-games .game-toolbar > :not(.game-preview-label) { display: none; }
-.game-preview-label {
-  margin-left: auto;
-  align-self: center;
-  color: var(--quiet);
-  font-size: 11px;
-  font-weight: 650;
-  letter-spacing: .08em;
-  text-transform: uppercase;
-}
+.studio.view-games .game-toolbar > :not(.preview-review) { display: none; }
 .studio .game-toolbar :is(.result-label,.download) { margin-left: auto; }
 .studio .game-toolbar .result-label { border-color: var(--line); }
 .studio .board {
