@@ -13,12 +13,14 @@ const plotHeight=180,plotTop=18,plotBottom=142;
 function TrendChart({title,description,dates,series,unit,sample,details,fixedMaximum,active,sources,onOpenGame}){
   const id=useId();
   const latest=Math.max(0,dates.length-1);
-  const [playhead,setPlayhead]=useState(latest),[selected,setSelected]=useState(latest);
+  const lastSample=dates.findLastIndex((_,i)=>series.some(line=>line.points[i]?.total));
+  const initial=Math.max(0,lastSample);
+  const [playhead,setPlayhead]=useState(initial),[selected,setSelected]=useState(initial);
   const chart=useRef(null),drag=useRef(null),resumeAt=useRef(0);
   const datesKey=dates.join(',');
   useEffect(()=>{
-    setPlayhead(latest);setSelected(latest);resumeAt.current=0;
-  },[datesKey,latest]);
+    setPlayhead(initial);setSelected(initial);resumeAt.current=0;
+  },[datesKey,initial]);
   useEffect(()=>{
     const node=chart.current;
     if(!node||!active||latest<1)return;
