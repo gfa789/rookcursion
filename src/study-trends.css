@@ -1,0 +1,52 @@
+
+/* The study dashboard scrolls independently of the navigation shell. */
+.studio .insights-scroll-page {
+  display: block;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  padding: 0 8px 16px 0;
+}
+.insights-scroll-page > :not(:first-child) { margin-top: 14px; }
+.insights-scroll-page .insight-content { display: block; }
+.insights-scroll-page .insight-filters { position: sticky; top: 0; z-index: 3; background: var(--canvas); padding-block: 5px; }
+.insights-scroll-page .ratings-title { margin: 12px 0; font-size: 18px; font-weight: 600; }
+.insights-scroll-page .rating-card { min-height: 320px; }
+.insights-scroll-page .rating-plot { flex: none; height: clamp(200px,32vh,340px); }
+.insights-scroll-page .insight-explore { width: 100%; }
+.study-trends { margin-block: 18px 0; }
+.trend-coverage { color: var(--muted); margin: 0 0 12px; font-size: 12px; }
+.study-trend-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 14px; align-items: start; }
+.trend-group { display: grid; gap: 8px; min-width: 0; }
+.trend-heading h2 { color: var(--ink); margin: 0; }
+.trend-heading p,.trend-empty { color: var(--muted); margin: 5px 0 0; line-height: 1.5; }
+.trend-select { color: var(--muted); display: grid; gap: 4px; font-size: 12px; }
+.studio .trend-select select { width: 100%; min-width: 0; min-height: 44px; padding: 8px 12px; border: 1px solid var(--line); font-size: 16px; }
+.trend-values { display: flex; flex-wrap: wrap; gap: 7px 16px; min-height: 64px; align-items: start; }
+.trend-values > strong { flex: 1 0 100%; font-size: 12px; color: var(--muted); }
+.trend-values > div { display: grid; grid-template-columns: auto auto; gap: 2px 7px; }
+.trend-values span { display: flex; align-items: center; gap: 5px; }
+.trend-values i { width: 7px; height: 7px; flex-shrink: 0; border-radius: 50%; }
+.trend-values small { grid-column: 1/-1; color: var(--muted); }
+.trend-chart { display: flex; align-items: start; min-width: 0; }
+.trend-axis { display: flex; flex-direction: column; justify-content: space-between; height: 138px; padding: 10px 6px 0 0; color: var(--muted); font-size: 11px; text-align: right; }
+.trend-scroll { flex: 1; min-width: 0; overflow-x: auto; overscroll-behavior-x: contain; touch-action: pan-x pan-y; scrollbar-color: var(--quiet) transparent; }
+.trend-scroll svg { display: block; cursor: crosshair; }
+.trend-scroll text { fill: var(--muted); font-size: 10px; }
+.trend-scrub { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; }
+.trend-scrub input { flex: 1; min-width: 0; height: 44px; }
+.trend-examples { display: grid; gap: 4px; }
+.trend-examples h3 { font-size: 12px; color: var(--muted); }
+.trend-examples button { min-height: 44px; display: flex; justify-content: space-between; align-items: center; text-align: left; gap: 8px; border-radius: 8px; background: var(--raised); padding: 8px 10px; }
+.repertoire-summary ul { display: grid; gap: 0; padding: 0; margin: 0; list-style: none; }
+.repertoire-summary li { padding: 8px 0; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.repertoire-summary li small { display: block; color: var(--muted); margin-top: 4px; }
+@media(max-width:760px) {
+  .study-trend-grid { grid-template-columns: 1fr; }
+  .studio .insights-scroll-page { padding-right: 3px; }
+}
+@media (hover:hover) and (pointer:fine) {
+  .trend-scroll svg { user-select: none; cursor: grab; }
+  .trend-scroll svg:active { cursor: grabbing; }
+}

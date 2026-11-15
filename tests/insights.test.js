@@ -61,3 +61,20 @@ test('rating checkpoints expose exactly the rated games in their bucket and cont
   assert.deepEqual(weekly.points.find(p=>!p.anchor&&p.date==='2026-09-28').games.map(g=>g.id),['1','2','3']);
   assert.ok(daily.points.every(p=>p.games.every(g=>g.ended<=now/1000)));
 });
+
+test('study trends keep opening results and reviewed mistake rates on separate denominators',()=>{
+  const reviewed={...fact(1,'rapid','draw',true),ended:Date.UTC(2024,0,13)/1000};
+  const unreviewed={...fact(2,'rapid','win'),ended:Date.UTC(2024,0,20)/1000};
+  const later={...fact(3,'rapid','loss'),ended:Date.UTC(2024,1,10)/1000};
+  const blitz={...fact(4,'blitz','loss',true),ended:reviewed.ended};
+  const result=aggregateInsights([reviewed,unreviewed,later,blitz],'rapid',{now:Date.UTC(2024,2,1)});
+  const [jan,feb]=result.trends;
+  const key=JSON.stringify(['Italian Game','w']);
+  assert.equal(jan.date,'2024-01');
+  assert.deepEqual(jan.openings[key],{games:2,score:1.5,moves:20,errors:2});
+  assert.deepEqual(jan.phases.Opening,{moves:20,errors:2});
+  assert.equal(jan.themes['Opening decisions'],2);
+  assert.equal(jan.reviewed,1);
+  assert.deepEqual(feb.openings[key],{games:1,score:0,moves:0,errors:0});
+  assert.equal(feb.moves,0);
+});

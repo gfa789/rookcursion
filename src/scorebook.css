@@ -377,3 +377,30 @@
   .studio.view-games { grid-template-columns: var(--rail-width) minmax(0,1fr); }
   .studio.view-games .main { display: none; }
 }
+
+/* The active menu surface follows pointer selection; keyboard selection is immediate. */
+.studio .rail-selection { display: none; }
+@media(min-width:901px){
+  .studio .rail-selection {
+    position: absolute;
+    display: block;
+    pointer-events: none;
+    inset: 80px 12px auto;
+    height: 44px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: var(--raised);
+  }
+  .studio .rail-selection.nav-selection-moving { transition: transform 220ms var(--ease-drawer); }
+  .studio .app-navigation:not(.review-navigation) > button { position: relative; border-color: transparent; }
+  .studio .app-navigation:not(.review-navigation) > button:is([aria-current=page],[aria-current=location]) {
+    background: transparent;
+    border-color: transparent;
+  }
+}
+@media(hover:hover) and (pointer:fine){
+  .studio .app-navigation button:hover:not(:disabled) { background-color: rgb(132 50 91 / .08); }
+}
+@media(prefers-reduced-motion:reduce){
+  .studio .rail-selection.nav-selection-moving { transition: none; }
+}
