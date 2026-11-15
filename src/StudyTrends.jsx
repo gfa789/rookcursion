@@ -1,4 +1,4 @@
-import React,{useId,useLayoutEffect,useRef,useState} from 'react';
+import React,{useEffect,useId,useRef,useState} from 'react';
 import './study-trends.css';
 
 const colours=['#a52a5b','#236985','#486e45'];
@@ -8,41 +8,72 @@ const value=(point)=>point?.total?100*point.count/point.total:null;
 const labelDate=date=>new Date(date+(date.length===7?'-01':'')+'T00:00:00Z').toLocaleDateString('en-GB',{
   month:'short',...(date.length===7?{year:'numeric'}:{day:'numeric',year:'numeric'}),timeZone:'UTC',
 });
-const plotHeight=180,plotTop=18,plotBottom=142,spacing=72;
+const plotHeight=180,plotTop=18,plotBottom=142;
 
-function TrendChart({title,description,dates,series,unit,sample,details,fixedMaximum}){
+function TrendChart({title,description,dates,series,unit,sample,details,fixedMaximum,active,sources,onOpenGame}){
   const id=useId();
-  const [selected,setSelected]=useState(Math.max(0,dates.length-1));
-  const scroller=useRef(null),drag=useRef(null),dragged=useRef(false);
-  function startPan(event){
-    dragged.current=false;
-    if(event.pointerType==='mouse'&&event.button===0){
-      drag.current={x:event.clientX,left:event.currentTarget.scrollLeft};
-    }
-  }
-  function pan(event){
-    if(!drag.current||!event.buttons)return;
-    const delta=event.clientX-drag.current.x;
-    if(!dragged.current&&Math.abs(delta)<5)return;
-    dragged.current=true;
-    event.currentTarget.setPointerCapture(event.pointerId);
-    event.currentTarget.scrollLeft=drag.current.left-delta;
-  }
-  function stopPan(){drag.current=null;}
-  const current=Math.max(0,Math.min(selected,dates.length-1));
-  const width=Math.max(300,dates.length*spacing);
-  const maximum=fixedMaximum??Math.max(2,Math.ceil(Math.max(0,...series.flatMap(line=>line.points.map(value)))/2)*2);
-  const x=i=>spacing/2+i*spacing;
-  const y=v=>plotBottom-v/maximum*(plotBottom-plotTop);
+  const latest=Math.max(0,dates.length-1);
+  const [playhead,setPlayhead]=useState(latest),[selected,setSelected]=useState(latest);
+  const chart=useRef(null),drag=useRef(null),resumeAt=useRef(0);
   const datesKey=dates.join(',');
-  useLayoutEffect(()=>{
-    if(scroller.current)scroller.current.scrollLeft=scroller.current.scrollWidth;
-    setSelected(Math.max(0,dates.length-1));
-  },[datesKey]);
-  function choose(i,scroll=false){
-    setSelected(i);
-    if(scroll&&scroller.current)scroller.current.scrollLeft=x(i)-scroller.current.clientWidth/2;
+  useEffect(()=>{
+    setPlayhead(latest);setSelected(latest);resumeAt.current=0;
+  },[datesKey,latest]);
+  useEffect(()=>{
+    const node=chart.current;
+    if(!node||!active||latest<1)return;
+    const reduced=matchMedia('(prefers-reduced-motion: reduce)');
+    let visible=false;
+    const observer=new IntersectionObserver(([entry])=>{visible=entry.isIntersecting;});
+    observer.observe(node);
+    const timer=setInterval(()=>{
+      if(visible&&!document.hidden&&!reduced.matches&&!drag.current&&Date.now()>=resumeAt.current){
+        setPlayhead(position=>(position+1)%(latest+1));
+      }
+    },Math.max(85,Math.min(420,5200/(latest+1))));
+    return()=>{observer.disconnect();clearInterval(timer);};
+  },[active,latest,datesKey]);
+  function seek(index){
+    const next=Math.max(0,Math.min(latest,index));
+    setPlayhead(next);
+    setSelected(next);
+    resumeAt.current=Date.now()+750;
   }
+  function pointerIndex(event){
+    const bounds=event.currentTarget.getBoundingClientRect();
+    return Math.round(((event.clientX-bounds.left)/bounds.width*600-15)/570*latest);
+  }
+  function start(event){
+    if(!event.isPrimary||event.button!==0)return;
+    drag.current={id:event.pointerId,x:event.clientX,y:event.clientY,locked:false};
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }
+  function move(event){
+    const gesture=drag.current;
+    if(gesture?.id!==event.pointerId)return;
+    const distance=Math.abs(event.clientX-gesture.x);
+    if(!gesture.locked&&distance<Math.max(6,Math.abs(event.clientY-gesture.y)))return;
+    gesture.locked=true;
+    seek(pointerIndex(event));
+  }
+  function finish(event,cancel=false){
+    if(drag.current?.id!==event.pointerId)return;
+    if(!cancel)seek(pointerIndex(event));
+    drag.current=null;
+  }
+  function keyboard(event){
+    const next={ArrowLeft:selected-1,ArrowRight:selected+1,Home:0,End:latest}[event.key];
+    if(next===undefined)return;
+    event.preventDefault();seek(next);
+  }
+  const current=Math.min(selected,latest);
+  const moving=Math.min(playhead,latest);
+  const width=600;
+  const maximum=fixedMaximum??Math.max(2,Math.ceil(Math.max(0,...series.flatMap(line=>line.points.map(value)))/2)*2);
+  const x=i=>latest?15+i/latest*570:300;
+  const y=v=>plotBottom-v/maximum*(plotBottom-plotTop);
+  const ticks=[...new Set([0,Math.floor(latest/2),latest])];
+  const sourceGames=sources?.[current]??[];
   const noSamples=!series.some(line=>line.points.some(point=>point?.total));
   return <section className="insight-card trend-card" aria-labelledby={id}>
     <div className="trend-heading"><h2 id={id}>{title}</h2><p>{description}</p></div>
@@ -60,14 +91,14 @@ function TrendChart({title,description,dates,series,unit,sample,details,fixedMax
       </div>
       <div className="trend-chart">
         <div className="trend-axis" aria-hidden="true">{[maximum,maximum/2,0].map(v=><span key={v}>{number.format(v)}{unit}</span>)}</div>
-        <div className="trend-scroll" ref={scroller} onPointerDown={startPan} onPointerMove={pan} onPointerUp={stopPan} onPointerCancel={stopPan} onPointerLeave={stopPan} tabIndex={0} role="region" aria-label={title+' timeline. Scroll horizontally for earlier dates.'}>
-          <svg width={width} height={plotHeight} aria-hidden="true" onClick={event=>{
-            if(dragged.current)return;
-            const offset=event.clientX-event.currentTarget.getBoundingClientRect().left;
-            choose(Math.max(0,Math.min(dates.length-1,Math.floor(offset/spacing))));
-          }}>
+        <div className="trend-plot" ref={chart} onPointerDown={start} onPointerMove={move}
+          onPointerUp={e=>finish(e)} onPointerCancel={e=>finish(e,true)} onLostPointerCapture={e=>finish(e,true)}
+          onKeyDown={keyboard} tabIndex={0} role="region"
+          aria-label={title+' timeline. Swipe or use left and right arrow keys to inspect a date.'}>
+          <svg viewBox={`0 0 ${width} ${plotHeight}`} preserveAspectRatio="none" aria-hidden="true">
             {[maximum,maximum/2,0].map(v=><line key={v} x1="0" x2={width} y1={y(v)} y2={y(v)} stroke="var(--line)" strokeDasharray="3 4"/>)}
-            <rect x={current*spacing} y={plotTop} width={spacing} height={plotBottom-plotTop} fill="var(--hover)"/>
+            <line x1={x(current)} x2={x(current)} y1={plotTop} y2={plotBottom} stroke="var(--quiet)" strokeDasharray="4 4"/>
+            <line x1={x(moving)} x2={x(moving)} y1={plotTop} y2={plotBottom} stroke="var(--accent)" opacity=".65"/>
             {series.map((line,lineIndex)=>{
               const parts=[];
               let part=[];
@@ -84,21 +115,23 @@ function TrendChart({title,description,dates,series,unit,sample,details,fixedMax
                 </g>)}
               </g>;
             })}
-            {dates.map((date,i)=><text key={date} x={x(i)} y="168" textAnchor="middle">{labelDate(date).replace(/ (20)(\d\d)$/," '$2")}</text>)}
           </svg>
+          <div className="trend-ticks" aria-hidden="true">{ticks.map(i=><span key={i}>{labelDate(dates[i])}</span>)}</div>
         </div>
       </div>
-      <label className="trend-scrub">
-        <span>Scrub timeline</span>
-        <input aria-label={title+' timeline position'} type="range" min="0" max={dates.length-1} value={current}
-          disabled={dates.length<2} onChange={event=>choose(Number(event.target.value),true)}/>
-      </label>
+      <p className="trend-gesture">Swipe or drag to inspect a date</p>
+      {sources&&<div className="trend-examples">
+        <h3>Source games · {labelDate(dates[current])}</h3>
+        {sourceGames.length?sourceGames.map(game=><button key={game.id} onClick={()=>onOpenGame(game.id,game.index??-1)}>
+          {game.san?`${game.san} vs ${game.opponent}`:`vs ${game.opponent}`} <span aria-hidden="true">↗</span>
+        </button>):<p>No saved examples for this date.</p>}
+      </div>}
       {details}
     </>}
   </section>;
 }
 
-export default function StudyTrends({data,onOpenGame,onRepertoire}){
+export default function StudyTrends({data,onOpenGame,onRepertoire,onDrill,active}){
   const buckets=data.trends??[];
   const dates=buckets.map(bucket=>bucket.date);
   const [themeChoice,setTheme]=useState(null);
@@ -122,41 +155,69 @@ export default function StudyTrends({data,onOpenGame,onRepertoire}){
   ]:[];
   const coverage=`${number.format(data.reviewed)} of ${number.format(data.total)} games reviewed`;
   const resolution={month:'Monthly',week:'Weekly',day:'Daily'}[data.period.bucket];
+  const common={dates,active,onOpenGame};
   return <div className="study-trends">
     <p className="trend-coverage">{resolution} samples · {coverage}. Gaps indicate no sample.</p>
+    <Comparison comparison={data.comparison} themes={data.patterns} opening={opening} onDrill={onDrill}/>
     <div className="study-trend-grid">
-      <TrendChart title="Mistakes by phase" description="Inaccuracies, mistakes, and blunders per 100 reviewed moves in each phase."
-        dates={dates} series={phaseSeries} unit="" sample={p=>`${p.count} of ${p.total} moves`}/>
+      <TrendChart {...common} title="Mistakes by phase" description="Inaccuracies, mistakes, and blunders per 100 reviewed moves in each phase."
+        series={phaseSeries} unit="" sample={p=>`${p.count} of ${p.total} moves`}
+        sources={buckets.map(bucket=>bucket.sources?.reviewed)}/>
       <div className="trend-group">
         {theme&&<label className="trend-select">Mistake pattern
           <select value={theme.name} onChange={e=>setTheme(e.target.value)}>
             {data.patterns.map(p=><option key={p.name}>{p.name}</option>)}
           </select>
         </label>}
-        <TrendChart title="Recurring mistakes" description="Occurrences per 100 reviewed moves. Choose a pattern to see how often it comes up."
-          dates={dates} series={themeSeries} unit="" sample={p=>`${p.count} in ${p.total} moves`}
-          details={theme?.examples.length>0&&<div className="trend-examples">
-            <h3>Examples from this date range</h3>
-            {theme.examples.map(e=><button key={e.id+':'+e.index} onClick={()=>onOpenGame(e.id,e.index)}>{e.san} vs {e.opponent} <span aria-hidden="true">↗</span></button>)}
-          </div>}/>
+        <TrendChart {...common} title="Recurring mistakes" description="Occurrences per 100 reviewed moves."
+          series={themeSeries} unit="" sample={p=>`${p.count} in ${p.total} moves`}
+          sources={buckets.map(bucket=>bucket.sources?.themes[theme?.name])}
+          details={theme&&<button className="insight-action" onClick={()=>onDrill(theme.name)}>Drill this mistake</button>}/>
       </div>
-      <div className="trend-group">
-        {opening&&<label className="trend-select">Opening family
-          <select value={openingKey(opening)} onChange={e=>setOpening(e.target.value)}>
-            {openings.map(o=><option key={openingKey(o)} value={openingKey(o)}>{openingName(o)}</option>)}
-          </select>
-        </label>}
-        <TrendChart title="Opening results and errors" description="Compare game results with early-move errors for the selected opening. A win is one point and a draw is half."
-          dates={dates} series={openingSeries} unit="%" fixedMaximum={100} sample={p=>`${p.count} points in ${p.total} games`}/>
+      <div className="opening-explorer">
+        <aside className="insight-card opening-rail" aria-label="Opening explorer">
+          <h2>Opening explorer</h2>
+          <div className="opening-rail-list">
+            {openings.map(o=><button key={openingKey(o)} aria-pressed={o===opening} onClick={()=>setOpening(openingKey(o))}>
+              <strong>{o.name}</strong><small>{o.color==='w'?'White':'Black'} · {o.games} games</small>
+            </button>)}
+          </div>
+          <button className="insight-action" onClick={onRepertoire}>Full repertoire</button>
+        </aside>
+        <TrendChart {...common} title={opening?openingName(opening):'Opening results and errors'}
+          description="Game score and errors per 100 reviewed opening moves. A win is one point and a draw is half."
+          series={openingSeries} unit="%" fixedMaximum={100} sources={buckets.map(bucket=>opening&&bucket.sources?.openings[openingKey(opening)])}/>
       </div>
-      <section className="insight-card trend-card repertoire-summary">
-        <div className="trend-heading"><h2>Most played openings</h2><p>Result score across the selected date range.</p></div>
-        {openings.length>0?<ul>{openings.slice(0,6).map(o=><li key={openingKey(o)}>
-          <span><strong>{o.name}</strong><small>{o.color==='w'?'White':'Black'} · {o.games} games</small></span>
-          <b>{number.format(o.score)}%</b>
-        </li>)}</ul>:<p className="trend-empty">No openings in this date range.</p>}
-        <button className="insight-action" onClick={onRepertoire}>Open the full repertoire</button>
-      </section>
     </div>
   </div>;
+}
+
+function Comparison({comparison,themes,opening,onDrill}){
+  if(!comparison)return null;
+  const {recent,previous}=comparison;
+  const measure=(count,total)=>total?100*count/total:null;
+  const rows=phases.map(name=>({
+    label:name,...Object.fromEntries([['recent',recent],['previous',previous]].map(([key,w])=>{
+      const phase=w.phases[name];return [key,phase?measure(phase.errors,phase.moves):null];
+    })),
+  }));
+  for(const theme of themes.slice(0,3)){
+    rows.push({label:theme.name,theme:theme.name,recent:measure(recent.themes[theme.name]||0,recent.moves),previous:measure(previous.themes[theme.name]||0,previous.moves)});
+  }
+  const key=opening&&JSON.stringify([opening.name,opening.color]);
+  const openingWindows=key&&[previous.openings[key],recent.openings[key]];
+  const sampleEnough=openingWindows&&openingWindows.every(w=>w&&w.games>=5);
+  const print=rate=>rate===null?'—':number.format(rate);
+  const windowDates=w=>w.first?labelDate(new Date(w.first*1000).toISOString().slice(0,10))+' to '+labelDate(new Date(w.last*1000).toISOString().slice(0,10)):'No reviewed games';
+  return <section className="insight-card windows-card">
+    <h2>Last 100 vs previous 100</h2>
+    <p>Reviewed games for the selected time control across all dates. Rates are pooled per 100 reviewed moves.</p>
+    <table><thead><tr><th scope="col">Mistake rate</th><th scope="col">Previous<br/><small>{windowDates(previous)}<br/>{previous.games} games · {number.format(previous.moves)} moves</small></th><th scope="col">Latest<br/><small>{windowDates(recent)}<br/>{recent.games} games · {number.format(recent.moves)} moves</small></th></tr></thead>
+      <tbody>{rows.map(row=><tr key={row.label}><th scope="row">{row.theme?<button onClick={()=>onDrill(row.theme)}>{row.label} <span aria-hidden="true">↗</span></button>:row.label}</th><td>{print(row.previous)}</td><td>{print(row.recent)}</td></tr>)}</tbody>
+    </table>
+    {(recent.games<100||previous.games<100)&&<p>Fewer than 200 reviewed games. Treat the comparison as provisional.</p>}
+    {opening&&<p><strong>{opening.name} as {opening.color==='w'?'White':'Black'}</strong> · {sampleEnough?
+      `Result score ${print(measure(openingWindows[0].score,openingWindows[0].games))}% → ${print(measure(openingWindows[1].score,openingWindows[1].games))}% and opening errors per 100 moves ${print(measure(openingWindows[0].errors,openingWindows[0].moves))} → ${print(measure(openingWindows[1].errors,openingWindows[1].moves))} (${openingWindows[0].games} → ${openingWindows[1].games} games).`:
+      `Not enough games in both windows (previous ${openingWindows[0]?.games||0}, latest ${openingWindows[1]?.games||0}; need five each).`}</p>}
+  </section>;
 }

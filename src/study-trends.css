@@ -31,22 +31,39 @@
 .trend-values small { grid-column: 1/-1; color: var(--muted); }
 .trend-chart { display: flex; align-items: start; min-width: 0; }
 .trend-axis { display: flex; flex-direction: column; justify-content: space-between; height: 138px; padding: 10px 6px 0 0; color: var(--muted); font-size: 11px; text-align: right; }
-.trend-scroll { flex: 1; min-width: 0; overflow-x: auto; overscroll-behavior-x: contain; touch-action: pan-x pan-y; scrollbar-color: var(--quiet) transparent; }
-.trend-scroll svg { display: block; cursor: crosshair; }
-.trend-scroll text { fill: var(--muted); font-size: 10px; }
-.trend-scrub { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; }
-.trend-scrub input { flex: 1; min-width: 0; height: 44px; }
 .trend-examples { display: grid; gap: 4px; }
 .trend-examples h3 { font-size: 12px; color: var(--muted); }
 .trend-examples button { min-height: 44px; display: flex; justify-content: space-between; align-items: center; text-align: left; gap: 8px; border-radius: 8px; background: var(--raised); padding: 8px 10px; }
-.repertoire-summary ul { display: grid; gap: 0; padding: 0; margin: 0; list-style: none; }
-.repertoire-summary li { padding: 8px 0; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center; gap: 8px; }
-.repertoire-summary li small { display: block; color: var(--muted); margin-top: 4px; }
 @media(max-width:760px) {
   .study-trend-grid { grid-template-columns: 1fr; }
   .studio .insights-scroll-page { padding-right: 3px; }
 }
+.trend-plot { flex: 1; min-width: 0; touch-action: pan-y; user-select: none; }
+.trend-plot svg { display: block; width: 100%; height: 150px; }
+.trend-ticks { display: flex; justify-content: space-between; gap: 4px; color: var(--muted); font-size: 10px; }
+.trend-ticks span:last-child { text-align: right; }
+.trend-gesture,.trend-examples p { margin: 0; color: var(--muted); font-size: 12px; }
+.trend-axis { height: 120px; }
+.opening-explorer { grid-column: 1/-1; display: grid; grid-template-columns: minmax(180px,260px) minmax(0,1fr); gap: 12px; align-items: start; }
+.opening-rail-list { display: grid; max-height: 275px; overflow-y: auto; overscroll-behavior: contain; }
+.opening-rail-list button { display: grid; gap: 3px; text-align: left; min-height: 48px; padding: 7px 9px; border-bottom: 1px solid var(--line); background: transparent; }
+.opening-rail-list button[aria-pressed=true] { color: var(--accent); background: var(--hover); border-radius: 8px; }
+.opening-rail-list small,.windows-card p,.windows-card th small { color: var(--muted); }
+.windows-card { margin-bottom: 14px; }
+.windows-card p { margin: 0; line-height: 1.45; }
+.windows-card table { border-collapse: collapse; width: 100%; table-layout: fixed; font-variant-numeric: tabular-nums; }
+.windows-card th,.windows-card td { padding: 8px; text-align: right; border-bottom: 1px solid var(--line); }
+.windows-card th:first-child { width: 46%; text-align: left; }
+.windows-card tbody th { font-weight: 550; }
+.windows-card th small { font-weight: 400; }
+.windows-card th button { min-height: 44px; width: 100%; color: var(--accent); background: transparent; text-align: left; padding: 0; }
 @media (hover:hover) and (pointer:fine) {
-  .trend-scroll svg { user-select: none; cursor: grab; }
-  .trend-scroll svg:active { cursor: grabbing; }
+  .trend-plot { cursor: grab; }
+  .trend-plot:active { cursor: grabbing; }
+  .opening-rail-list button:hover { background: var(--hover); }
 }
+@media(max-width:760px) {
+  .opening-explorer { grid-template-columns: minmax(0,1fr); }
+  .opening-explorer .opening-rail-list { max-height: 145px; }
+}
+.rating-plot svg { touch-action: pan-y; }

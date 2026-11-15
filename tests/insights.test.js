@@ -78,3 +78,24 @@ test('study trends keep opening results and reviewed mistake rates on separate d
   assert.deepEqual(feb.openings[key],{games:1,score:0,moves:0,errors:0});
   assert.equal(feb.moves,0);
 });
+
+test('the comparison uses disjoint reviewed windows across dates and timeline links use the sampled bucket',()=>{
+  const base=Date.UTC(2024,0,1)/1000;
+  const games=Array.from({length:201},(_,i)=>{
+    const row={...fact(i+1,'rapid','win',true),ended:base+i*86400};
+    row.examples=[{id:row.id,index:8,theme:'Opening decisions',san:'e4'}];
+    return row;
+  });
+  games.push({...fact(500,'rapid','win'),ended:base+201*86400});
+  games.push({...fact(501,'blitz','win',true),ended:base+201*86400});
+  const data=aggregateInsights(games,'rapid',{range:'month',now:(base+202*86400)*1000});
+  assert.equal(data.comparison.recent.games,100);
+  assert.equal(data.comparison.previous.games,100);
+  assert.equal(data.comparison.previous.first,base+86400);
+  assert.equal(data.comparison.recent.first,base+101*86400);
+  assert.equal(data.comparison.recent.moves,2000);
+  assert.equal(data.comparison.recent.themes['Opening decisions'],200);
+  const lastReviewed=data.trends.find(b=>b.sources?.themes['Opening decisions']?.some(g=>g.id==='201'));
+  assert.equal(lastReviewed.sources.themes['Opening decisions'][0].index,8);
+  assert.equal(data.trends.at(-1).sources.reviewed.length,0);
+});

@@ -54,17 +54,49 @@ function timeBucket(ended,granularity){
   return date.toISOString().slice(0,granularity==='month'?7:10);
 }
 
+const openingKey=f=>JSON.stringify([f.opening.split(':')[0],f.color]);
+
+function addSource(list,source){
+  if(list.some(item=>item.id===source.id))return;
+  list.unshift(source);
+  if(list.length>3)list.pop();
+}
+
+function compareReviewedGames(reviewed){
+  const summarize=games=>{
+    const summary={games:games.length,first:games[0]?.ended,last:games.at(-1)?.ended,moves:0,phases:{},themes:{},openings:{}};
+    for(const game of games){
+      summary.moves+=game.ownMoves;
+      for(const [name,p] of Object.entries(game.phases)){
+        const phase=summary.phases[name]??={moves:0,errors:0};
+        phase.moves+=p.moves;
+        phase.errors+=p.errors;
+      }
+      for(const [name,t] of Object.entries(game.themes))summary.themes[name]=(summary.themes[name]||0)+t.count;
+      const opening=summary.openings[openingKey(game)]??={games:0,score:0,moves:0,errors:0};
+      opening.games++;
+      opening.score+=game.result==='win'?1:game.result==='draw'?.5:0;
+      opening.moves+=game.phases.Opening?.moves||0;
+      opening.errors+=game.phases.Opening?.errors||0;
+    }
+    return summary;
+  };
+  return {recent:summarize(reviewed.slice(-100)),previous:summarize(reviewed.slice(-200,-100))};
+}
+
 function studyTrends(facts,openings,granularity){
   const featured=new Set(openings.slice(0,12).map(o=>JSON.stringify([o.name,o.color])));
   const buckets=new Map();
   for(const fact of facts){
     const date=timeBucket(fact.ended,granularity);
-    const bucket=buckets.get(date)??{date,games:0,reviewed:0,moves:0,phases:{},themes:{},openings:{}};
+    const bucket=buckets.get(date)??{date,games:0,reviewed:0,moves:0,phases:{},themes:{},openings:{},sources:{reviewed:[],themes:{},openings:{}}};
     buckets.set(date,bucket);
     bucket.games++;
-    const openingKey=JSON.stringify([fact.opening.split(':')[0],fact.color]);
-    if(featured.has(openingKey)){
-      const opening=bucket.openings[openingKey]??={games:0,score:0,moves:0,errors:0};
+    const source={id:fact.id,opponent:fact.opponent,ended:fact.ended};
+    const key=openingKey(fact);
+    if(featured.has(key)){
+      addSource(bucket.sources.openings[key]??=[],source);
+      const opening=bucket.openings[key]??={games:0,score:0,moves:0,errors:0};
       opening.games++;
       opening.score+=fact.result==='win'?1:fact.result==='draw'?.5:0;
       if(fact.reviewed&&fact.phases.Opening){
@@ -73,6 +105,12 @@ function studyTrends(facts,openings,granularity){
       }
     }
     if(!fact.reviewed)continue;
+    addSource(bucket.sources.reviewed,source);
+    for(const example of fact.examples){
+      addSource(bucket.sources.themes[example.theme]??=[],{
+        ...source,index:example.index,san:example.san,
+      });
+    }
     bucket.reviewed++;
     bucket.moves+=fact.ownMoves;
     for(const [name,phase] of Object.entries(fact.phases)){
@@ -137,5 +175,6 @@ export function aggregateInsights(allFacts,scope='all',options={}){
   const weakest=Object.entries(phases).filter(([,p])=>p.moves>=30).sort((a,b)=>b[1].errors/b[1].moves-a[1].errors/a[1].moves)[0];
   if(weakest)highlights.push({title:'Focus your next study session',body:`${weakest[0]}: ${round(weakest[1].errors/weakest[1].moves*100)} costly moves per 100 moves, based on ${weakest[1].moves} moves.`});
   if(!highlights.length)highlights.push({title:'Your history is being prepared',body:'Opening and result statistics appear as archives arrive. Engine-based insights build as reviews finish.'});
-  return {scope,period,trends:studyTrends(facts,openings,period.bucket),total:facts.length,reviewed:reviewed.length,coverage:facts.length?round(reviewed.length/facts.length*100):0,counts,score:score(facts),quality:mean(reviewed.map(f=>f.quality).filter(v=>v!==null)),ownMoves,grades,blundersPer100:ownMoves?round((grades.Blunder||0)/ownMoves*100):null,errorRate:ownMoves?round(((grades.Inaccuracy||0)+(grades.Mistake||0)+(grades.Blunder||0))/ownMoves*100):null,first:facts[0]?.ended||null,last:facts.at(-1)?.ended||null,recent:{games:recent.length,score:score(recent),previousScore:score(previous)},colours,openings,bestOpenings:ranked(-1),worstOpenings:ranked(1),minimumOpeningSample:5,patterns,phases:Object.entries(phases).map(([name,p])=>({name,...p,errorRate:round(p.errors/p.moves*100)})),ratings,examples,highlights,depths:[...new Set(reviewed.map(f=>f.depth))].sort((a,b)=>a-b)};
+  const comparisonGames=allFacts.filter(f=>f.reviewed&&f.ended<=period.end&&(scope==='all'||f.timeClass===scope)).sort((a,b)=>a.ended-b.ended);
+  return {scope,period,comparison:compareReviewedGames(comparisonGames),trends:studyTrends(facts,openings,period.bucket),total:facts.length,reviewed:reviewed.length,coverage:facts.length?round(reviewed.length/facts.length*100):0,counts,score:score(facts),quality:mean(reviewed.map(f=>f.quality).filter(v=>v!==null)),ownMoves,grades,blundersPer100:ownMoves?round((grades.Blunder||0)/ownMoves*100):null,errorRate:ownMoves?round(((grades.Inaccuracy||0)+(grades.Mistake||0)+(grades.Blunder||0))/ownMoves*100):null,first:facts[0]?.ended||null,last:facts.at(-1)?.ended||null,recent:{games:recent.length,score:score(recent),previousScore:score(previous)},colours,openings,bestOpenings:ranked(-1),worstOpenings:ranked(1),minimumOpeningSample:5,patterns,phases:Object.entries(phases).map(([name,p])=>({name,...p,errorRate:round(p.errors/p.moves*100)})),ratings,examples,highlights,depths:[...new Set(reviewed.map(f=>f.depth))].sort((a,b)=>a-b)};
 }
