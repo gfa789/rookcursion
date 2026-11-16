@@ -176,3 +176,58 @@
   .desk-action-icon,.studio .library .game-card { transition: none; }
   .studio .desk-actions button:hover:not(:active) { transform: none; }
 }
+
+/* Shared surface and interaction finish across the study workspace. */
+.studio :is(.search,.study-filter-fields select,.analyze-row select) {
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--surface);
+}
+.studio :is(button,a,input,select):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+.studio .board .square:focus-visible { outline-offset: -3px; }
+.studio :is(.trend-card,.windows-card,.practice-progress,.rating-card) {
+  border-radius: 14px;
+  background: var(--surface);
+}
+.studio :is(.trend-heading h2,.ratings-title) { letter-spacing: -.025em; line-height: 1.2; }
+.studio :is(.trend-coverage,.trend-heading p,.windows-card p) { line-height: 1.55; }
+.studio :is(.saved-quality,.rating,.engine-score,.trend-values b) { font-variant-numeric: tabular-nums; }
+.studio .trend-series { padding: 6px 9px; border: 1px solid transparent; }
+.studio .trend-series[aria-pressed=true] { border-color: color-mix(in srgb,var(--accent) 25%,transparent); }
+.studio .trend-examples button { border: 1px solid var(--line); background: var(--surface); }
+.studio :is(.puzzle-actions button,.trend-examples button,.opening-metrics button,.variation-controls button) {
+  transition: transform 140ms var(--ease-out), background-color 160ms ease, border-color 160ms ease;
+}
+.studio :is(.puzzle-actions button,.trend-examples button,.opening-metrics button,.variation-controls button):active:not(:disabled) {
+  transform: scale(.975);
+}
+.studio .practice-solved { animation-duration: 240ms; }
+.studio .puzzle-sheet,.studio .explanation-sheet {
+  transform-origin: center bottom;
+  transition: opacity 180ms var(--ease-out), translate 220ms var(--ease-out);
+}
+@starting-style {
+  .studio .puzzle-sheet,.studio .explanation-sheet { opacity: 0; translate: 0 10px; }
+}
+@media (hover:hover) and (pointer:fine) {
+  .studio :is(.trend-examples button,.opening-metrics button,.variation-controls button):hover:not(:disabled) {
+    border-color: color-mix(in srgb,var(--accent) 38%,var(--line));
+    background-color: var(--hover);
+  }
+  .studio .puzzle-actions button:hover:not(:disabled):not(:active) { transform: translateY(-2px); }
+}
+@media (min-width:901px) {
+  .studio .desk-intro h1 { font-size: clamp(36px,4.2vw,64px); letter-spacing: -.055em; }
+  .studio .desk-game h2 { letter-spacing: -.04em; }
+  .studio .review-panel { border-radius: 14px; }
+}
+@media (prefers-reduced-motion:reduce) {
+  .studio :is(.puzzle-actions button,.trend-examples button,.opening-metrics button,.variation-controls button,.puzzle-sheet,.explanation-sheet) { transition: none; }
+  .studio .puzzle-actions button:hover:not(:disabled):not(:active) { transform: none; }
+}
+@media (max-width:900px) and (orientation:portrait) {
+  .studio .puzzle-board-slot { align-items: start; padding-top: 6px; }
+}
