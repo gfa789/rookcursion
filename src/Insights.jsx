@@ -26,7 +26,7 @@ function RatingChart({ratings,focus,onFocus,onReset,onPoint}){
   const openPoint=(control,point)=>{if(first!==last)setCursor((point.ended-first)/(last-first));onPoint(control,point);};
   const selectNearest=event=>{const bounds=event.currentTarget.getBoundingClientRect(),px=(event.clientX-bounds.left)*w/bounds.width,py=(event.clientY-bounds.top)*h/bounds.height;const candidates=series.flatMap(r=>r.points.map(p=>({p,control:r.control,distance:(x(p)-px)**2+(y(p)-py)**2})));candidates.sort((a,b)=>a.distance-b.distance);if(candidates[0])openPoint(candidates[0].control,candidates[0].p);};
   return <section className="insight-card rating-card" aria-label="Rating trajectory">
-    <div className="rating-plot" ref={ref}>{points.length?<svg viewBox={`0 0 ${w} ${h}`} role="group" aria-label="Interactive rating history. Select a checkpoint to see its games" onClick={e=>{if(!consumed.current)selectNearest(e);}}
+    <div className="rating-plot" ref={ref}>{points.length?<svg viewBox={`0 0 ${w} ${h}`} role="group" aria-label="Interactive rating history. Select a checkpoint to see its rating" onClick={e=>{if(!consumed.current)selectNearest(e);}}
       onPointerDown={e=>{if(e.isPrimary&&e.button===0){consumed.current=false;ratingGesture.current={id:e.pointerId,x:e.clientX,y:e.clientY};}}}
       onPointerMove={e=>{
         const drag=ratingGesture.current;
@@ -35,24 +35,25 @@ function RatingChart({ratings,focus,onFocus,onReset,onPoint}){
       }}
       onPointerUp={e=>{if(consumed.current)seekRating(e);ratingGesture.current=null;}}
       onPointerLeave={()=>{ratingGesture.current=null;}}
-      onPointerCancel={()=>{ratingGesture.current=null;}}>{[0,.5,1].map(t=><g key={t}><line x1={left} x2={right} y1={top+t*(bottom-top)} y2={top+t*(bottom-top)} stroke="var(--line)" strokeDasharray="3 5"/><text x="0" y={top+4+t*(bottom-top)}>{fmt(Math.round(max-(max-min)*t))}</text></g>)}{first!==last&&<line x1={left+cursor*(right-left)} x2={left+cursor*(right-left)} y1={top} y2={bottom} stroke="var(--accent)" opacity=".55"/>}{series.map(r=><g key={r.control}><polyline points={r.points.map(p=>`${x(p)},${y(p)}`).join(' ')} fill="none" stroke={colours[r.control]} strokeWidth="2.4" vectorEffect="non-scaling-stroke"/>{r.points.map((p,i)=><g key={p.ended+':'+i} role="button" tabIndex={0} aria-label={`${r.control}, ${date(p.ended)}, rating ${p.rating}, ${p.games?.length||0} ${(p.games?.length||0)===1?'game':'games'}. Open games`} onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();openPoint(r.control,p);}}}><circle className="rating-hit" cx={x(p)} cy={y(p)} r="12" fill="transparent"/><circle className="rating-dot" cx={x(p)} cy={y(p)} r="3" fill={colours[r.control]} pointerEvents="none"/></g>)}</g>)}{first===last?<text x={(left+right)/2} y={h-5} textAnchor="middle">{axisDate(first)}</text>:<><text x={left} y={h-5}>{axisDate(first)}</text><text x={right} y={h-5} textAnchor="end">{axisDate(last)}</text></>}</svg>:<div className="insight-empty"><strong>No rated games in this period</strong><button className="insight-action" onClick={onReset}>Show all time</button></div>}</div>
+      onPointerCancel={()=>{ratingGesture.current=null;}}>{[0,.5,1].map(t=><g key={t}><line x1={left} x2={right} y1={top+t*(bottom-top)} y2={top+t*(bottom-top)} stroke="var(--line)" strokeDasharray="3 5"/><text x="0" y={top+4+t*(bottom-top)}>{fmt(Math.round(max-(max-min)*t))}</text></g>)}{first!==last&&<line x1={left+cursor*(right-left)} x2={left+cursor*(right-left)} y1={top} y2={bottom} stroke="var(--accent)" opacity=".55"/>}{series.map(r=><g key={r.control}><polyline points={r.points.map(p=>`${x(p)},${y(p)}`).join(' ')} fill="none" stroke={colours[r.control]} strokeWidth="2.4" vectorEffect="non-scaling-stroke"/>{r.points.map((p,i)=><g key={p.ended+':'+i} role="button" tabIndex={0} aria-label={`${r.control}, ${date(p.ended)}, rating ${p.rating}, ${p.games?.length||0} ${(p.games?.length||0)===1?'game':'games'}. Show rating`} onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();openPoint(r.control,p);}}}><circle className="rating-hit" cx={x(p)} cy={y(p)} r="12" fill="transparent"/><circle className="rating-dot" cx={x(p)} cy={y(p)} r="3" fill={colours[r.control]} pointerEvents="none"/></g>)}</g>)}{first===last?<text x={(left+right)/2} y={h-5} textAnchor="middle">{axisDate(first)}</text>:<><text x={left} y={h-5}>{axisDate(first)}</text><text x={right} y={h-5} textAnchor="end">{axisDate(last)}</text></>}</svg>:<div className="insight-empty"><strong>No rated games in this period</strong><button className="insight-action" onClick={onReset}>Show all time</button></div>}</div>
     {!!series.length&&<div className="rating-legend">{ratings.map(r=><button aria-pressed={focus===r.control} key={r.control} style={{'--series-colour':colours[r.control]}} onClick={()=>onFocus(r.control)} aria-label={`${r.control} rating ${fmt(r.current)}, change ${r.change>=0?'+':''}${r.change}. Filter rating series`}><span><i/>{r.control}</span><strong>{fmt(r.current)}</strong><small className={r.change<0?'negative':''}>{r.change>=0?'+':''}{fmt(r.change)}</small></button>)}</div>}
   </section>;
 }
-const MISTAKE_VIEWS=[
-  ['patterns','Recurring patterns'],['Move timing','When mistakes happen'],
-  ['Recovery','After a mistake'],['Clock pressure','Clock pressure'],
-  ['Conversion','Winning from ahead or behind'],
-];
-const SECTIONS=['Ratings','Openings','Mistakes'];
+const MISTAKE_VIEWS=['Move timing','Recovery','Clock pressure','Conversion'];
 const openingKey=opening=>JSON.stringify([opening.name,opening.color]);
 
-export default function Insights({active=true,onOpenGame,onDrill}){
-  const [section,setSection]=useState('Ratings'),[scope,setScope]=useState('all'),[range,setRange]=useState('all');
+export default function Insights({active=true,section,filters,onCloseFilters,onDrill}){
+  const [scope,setScope]=useState('all'),[range,setRange]=useState('all');
   const [data,setData]=useState(null),[error,setError]=useState(''),[reload,setReload]=useState(0);
-  const [openingChoice,setOpeningChoice]=useState(null),[patternChoice,setPatternChoice]=useState('all');
+  const [openingChoice,setOpeningChoice]=useState(null);
   const [ratingFocus,setRatingFocus]=useState(null),[ratingPoint,setRatingPoint]=useState(null);
-  const [mistakeView,setMistakeView]=useState('patterns');
+  const drawer=useRef(null),page=useRef(null);
+  useEffect(()=>{page.current.scrollTop=0;},[section]);
+  useEffect(()=>{
+    const dialog=drawer.current;
+    if(filters&&active&&!dialog.open)dialog.showModal();
+    if((!filters||!active)&&dialog.open)dialog.close();
+  },[filters,active]);
   useEffect(()=>{
     if(!active)return;
     const controller=new AbortController();
@@ -75,10 +76,8 @@ export default function Insights({active=true,onOpenGame,onDrill}){
   },[scope,range,active,reload]);
   const fresh=data?.scope===scope&&data?.period.key===range?data:null;
   const openings=fresh?.openings??[];
-  const patterns=fresh?.patterns??[];
-  const allOpenings=openingChoice==='all',allPatterns=patternChoice==='all';
+  const allOpenings=openingChoice==='all';
   const opening=openings.find(item=>openingKey(item)===openingChoice)??openings[0];
-  const pattern=patterns.find(item=>item.name===patternChoice)??patterns[0];
   const focusedRatings=fresh?.ratings.filter(r=>!ratingFocus||r.control===ratingFocus)??[];
   const latest=focusedRatings.flatMap(r=>r.points.slice(-1).map(point=>({control:r.control,point})))
     .reduce((best,current)=>!best||current.point.ended>best.point.ended?current:best,null);
@@ -86,14 +85,11 @@ export default function Insights({active=true,onOpenGame,onDrill}){
   function chooseFilter(setter,value){
     setter(value);setRatingPoint(null);setRatingFocus(null);setError('');
   }
-  function chooseSection(next){
-    setSection(next);
-  }
-  return <section className="insights-panel study-insights" aria-label="Chess insights dashboard">
-    <aside className="study-sidebar" aria-label="Insights sidebar">
-      <nav aria-label="Insights sections">
-        {SECTIONS.map(name=><button key={name} aria-current={section===name?'page':undefined} onClick={()=>chooseSection(name)}>{name}</button>)}
-      </nav>
+  return <section ref={page} className="insights-panel study-insights" aria-label="Chess insights dashboard" data-section={section}>
+    <dialog ref={drawer} id="insight-filters" className="insight-drawer" data-keyboard={filters?.keyboard}
+      aria-labelledby="insight-filter-title" onClose={onCloseFilters} onClick={event=>{if(event.target===event.currentTarget)event.currentTarget.close();}}>
+      <div className="insight-drawer-body">
+        <header><h2 id="insight-filter-title">{section} filters</h2><button type="button" onClick={()=>drawer.current.close()} autoFocus>Done</button></header>
       <div className="study-filter-fields">
         <label>Game type<select value={scope} onChange={e=>chooseFilter(setScope,e.target.value)}>
           {SCOPES.map(s=><option key={s} value={s}>{s==='all'?'All games':s[0].toUpperCase()+s.slice(1)}</option>)}
@@ -105,44 +101,29 @@ export default function Insights({active=true,onOpenGame,onDrill}){
       {section==='Openings'&&<label className="insight-view-select">Opening
         <select value={allOpenings||!opening?'all':openingKey(opening)} onChange={e=>setOpeningChoice(e.target.value)}>
           <option value="all">Six most-played openings</option>
-          {openings.map(item=><option key={openingKey(item)} value={openingKey(item)}>{item.name} � {item.color==='w'?'White':'Black'}</option>)}
+          {openings.map(item=><option key={openingKey(item)} value={openingKey(item)}>{item.name} · {item.color==='w'?'White':'Black'}</option>)}
         </select>
       </label>}
-      {section==='Mistakes'&&<label className="insight-view-select">Topic
-        <select value={mistakeView==='patterns'?(allPatterns||!pattern?'patterns':'pattern:'+pattern.name):mistakeView}
-          onChange={e=>{
-            const value=e.target.value;
-            if(value.startsWith('pattern:')||value==='patterns'){
-              setMistakeView('patterns');
-              setPatternChoice(value==='patterns'?'all':value.slice(8));
-            }else setMistakeView(value);
-          }}>
-          {MISTAKE_VIEWS.map(([value,label])=><option key={value} value={value}>{label}</option>)}
-          {patterns.length>0&&<optgroup label="Individual patterns">
-            {patterns.map(item=><option key={item.name} value={'pattern:'+item.name}>{item.name}</option>)}
-          </optgroup>}
-        </select>
-      </label>}
-    </aside>
+      </div>
+    </dialog>
     <div className="study-insights-content">
       {error&&<div className="insight-error" role="alert">{error} <button className="insight-action" onClick={()=>setReload(n=>n+1)}>Retry</button></div>}
       {!fresh&&!error&&<LoadingSkeleton view="insights" label="Loading insights"/>}
       {fresh&&<>
         {section==='Ratings'&&<section className="study-ratings">
-          <header className="rating-intro"><h2>Rating history</h2><p>Each line tracks one time control. Tap a point to see the rating and a game from that date.</p></header>
+          <header className="rating-intro"><h2>Rating history</h2><p>Each line tracks one time control. Tap or drag to check a rating by date.</p></header>
           <RatingChart ratings={fresh.ratings} focus={ratingFocus}
             onFocus={control=>{setRatingFocus(ratingFocus===control?null:control);setRatingPoint(null);}}
             onReset={()=>chooseFilter(setRange,'all')} onPoint={(control,point)=>setRatingPoint({control,point})}/>
-          {ratingSelection&&<div className="trend-examples rating-sources">
-            <h3>{ratingSelection.control} · {fmt(ratingSelection.point.rating)} · {date(ratingSelection.point.ended)}</h3>
-            {[...(ratingSelection.point.games??[])].reverse().slice(0,1).map(game=><button key={game.id} onClick={()=>onOpenGame(game.id,-1)}>
-              vs {game.opponent} <span aria-hidden="true">↗</span>
-            </button>)}
-          </div>}
+          {ratingSelection&&<p className="rating-checkpoint" aria-live="polite">
+            {ratingSelection.control} · <strong>{fmt(ratingSelection.point.rating)}</strong> · {date(ratingSelection.point.ended)}
+          </p>}
         </section>}
-        {section==='Mistakes'&&mistakeView!=='patterns'&&<InsightFocus key={mistakeView+scope+range} data={fresh} view={mistakeView} onOpenGame={onOpenGame}/>}
-        {(section==='Openings'||section==='Mistakes'&&mistakeView==='patterns')&&<StudyTrends key={`${scope}:${range}:${section}`} data={fresh} section={section==='Mistakes'?'Patterns':section} opening={opening}
-          pattern={pattern} allOpenings={allOpenings} allPatterns={allPatterns} onOpenGame={onOpenGame} onDrill={name=>onDrill(scope,name)}/>}
+        {section==='Openings'&&<StudyTrends key={scope+range+section} data={fresh} section="Openings" opening={opening} allOpenings={allOpenings}/>}
+        {section==='Mistakes'&&<>
+          <StudyTrends key={scope+range+section} data={fresh} section="Patterns" onDrill={name=>onDrill(scope,name)}/>
+          {MISTAKE_VIEWS.map(view=><InsightFocus key={scope+range+view} data={fresh} view={view}/>)}
+        </>}
       </>}
     </div>
   </section>;

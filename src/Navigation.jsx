@@ -1,9 +1,24 @@
 import React,{useState} from 'react';
 import './navigation.css';
 const paths={desk:<path d="m3 10 9-7 9 7v10H3zM9 20v-6h6v6"/>,learn:<><path d="M12 6c-3-2-6-2-9-1v14c3-1 6-1 9 1 3-2 6-2 9-1V5c-3-1-6-1-9 1Z"/><path d="M12 6v14M6 9h3m6 0h3"/></>,review:<><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 12h16M12 4v16M4 8h16M8 4v16M16 4v16M4 16h16"/></>,puzzles:<path d="M9 4H4v5a3 3 0 1 1 0 6v5h5a3 3 0 1 1 6 0h5v-5a3 3 0 1 0 0-6V4h-5a3 3 0 1 0-6 0Z"/>,insights:<><path d="M4 4v16h17M8 15l4-5 4 2 5-7"/><path d="M17 5h4v4"/></>,games:<><rect x="5" y="6" width="15" height="15" rx="2"/><path d="M16 3H3v14M9 11h7M9 15h7"/></>};
-export default function Navigation({view,onNavigate,onFlip,onBack}){
+const insightSections=['Ratings','Openings','Mistakes'];
+
+function InsightSections({section,onChange,mobile=false}){
+  return <nav className={mobile?'insight-glass-nav':'insight-rail-nav'} aria-label="Insights sections">
+    {mobile&&<span className="insight-glass-selection" aria-hidden="true"
+      style={{transform:`translateX(${insightSections.indexOf(section)*100}%)`}}/>}
+    {insightSections.map(name=><button type="button" key={name} aria-current={section===name?'page':undefined}
+      aria-haspopup={section===name?'dialog':undefined}
+      title={section===name?name+' filters':undefined}
+      onClick={event=>onChange(name,event)}>{name}{section===name&&<svg aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3"><path d="M2 4h12M2 8h12M2 12h12"/><path strokeWidth="3" d="M6 3v2m4 2v2m-5 2v2"/></svg>}</button>)}
+  </nav>;
+}
+
+export default function Navigation({view,onNavigate,onFlip,onBack,insightSection,onInsightSection}){
   const [animateSelection,setAnimateSelection]=useState(false);
   const tabs=[['desk','Desk'],['games','Games'],['puzzles','Puzzles'],['learn','Learn'],['insights','Insights']];
   const activeIndex=Math.max(0,tabs.findIndex(([key])=>key===(view==='review'?'games':view)));
-  return <><nav className={`app-navigation ${view==='review'?'main-nav-in-review':''}`} aria-label="Main navigation"><div className="rail-brand" aria-hidden="true">Afterboard</div><span className={`nav-selection ${animateSelection?'nav-selection-moving':''}`} style={{transform:`translateX(${activeIndex*100}%)`}} aria-hidden="true"/><span className={`rail-selection ${animateSelection?'nav-selection-moving':''}`} style={{transform:`translateY(${activeIndex*49}px)`}} aria-hidden="true"/>{tabs.map(([key,label])=><button key={key} aria-current={view===key?'page':view==='review'&&key==='games'?'location':undefined} onClick={event=>{setAnimateSelection(event.detail>0);onNavigate(key);}}><svg viewBox="0 0 24 24" width="23" height="23" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[key]}</svg><span>{label}</span></button>)}</nav>{view==='review'&&<nav className="app-navigation review-navigation" aria-label="Review controls"><button onClick={onBack}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="m14 5-7 7 7 7M7 12h14"/></svg><span>Back</span></button><button onClick={onFlip} aria-label="Flip board"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="M7 4v16m-3-3 3 3 3-3M17 20V4m-3 3 3-3 3 3"/></svg><span>Flip</span></button></nav>}</>;
+  return <><nav className={`app-navigation ${view==='review'?'main-nav-in-review':''}`} aria-label="Main navigation"><div className="rail-brand" aria-hidden="true">Afterboard</div><span className={`nav-selection ${animateSelection?'nav-selection-moving':''}`} style={{transform:`translateX(${activeIndex*100}%)`}} aria-hidden="true"/><span className={`rail-selection ${animateSelection?'nav-selection-moving':''}`} style={{transform:`translateY(${activeIndex*49}px)`}} aria-hidden="true"/>{tabs.map(([key,label])=><button key={key} aria-current={view===key?'page':view==='review'&&key==='games'?'location':undefined} onClick={event=>{setAnimateSelection(event.detail>0);onNavigate(key);}}><svg viewBox="0 0 24 24" width="23" height="23" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[key]}</svg><span>{label}</span></button>)}{view==='insights'&&<InsightSections section={insightSection} onChange={onInsightSection}/>}</nav>
+  {view==='insights'&&<InsightSections mobile section={insightSection} onChange={onInsightSection}/>}
+  {view==='review'&&<nav className="app-navigation review-navigation" aria-label="Review controls"><button onClick={onBack}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="m14 5-7 7 7 7M7 12h14"/></svg><span>Back</span></button><button onClick={onFlip} aria-label="Flip board"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="M7 4v16m-3-3 3 3 3-3M17 20V4m-3 3 3-3 3 3"/></svg><span>Flip</span></button></nav>}</>;
 }

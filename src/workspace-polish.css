@@ -263,3 +263,36 @@
 @media (prefers-reduced-motion:reduce) {
   .studio.view-games .game-scroll .game-card { transition:none; }
 }
+
+/* The archive reads as one ledger, with the search and sync above it. */
+.studio.view-games .library { gap:10px; min-height:0; }
+.studio.view-games .library .games-heading {
+  display:flex; flex-direction:row; justify-content:space-between; align-items:center;
+  gap:10px; padding:2px 0 5px;
+}
+.studio.view-games .games-heading h1 { margin:0; font-size:30px; line-height:1.12; letter-spacing:-.045em; font-weight:650; }
+.studio.view-games .games-heading .sync-button {
+  display:grid; place-items:center; width:44px; height:44px; padding:0; margin:0;
+  color:var(--ink); background:transparent; border:1px solid var(--line); border-radius:8px;
+}
+.games-ledger { display:flex; flex-direction:column; flex:1; min-height:0; min-width:0; }
+.games-columns {
+  display:grid; grid-template-columns:minmax(0,1fr) 46px 56px; gap:8px;
+  padding:8px 12px; border-block:1px solid var(--line);
+  color:var(--muted); font-size:11px; font-weight:650;
+}
+.games-columns span:not(:first-child) { text-align:right; }
+.studio.view-games .game-scroll .game-card { grid-template-columns:minmax(0,1fr) 46px 56px; padding-inline:12px; min-height:60px; }
+.studio.view-games .game-scroll { flex:1; }
+.studio.view-games .game-scroll .game-card.active { box-shadow:inset 2px 0 var(--accent); }
+.studio.view-games .saved-quality { font-family:inherit; font-weight:600; }
+@media(hover:hover) {
+  .studio.view-games .games-heading .sync-button:hover { background:var(--hover); }
+}
+@media(max-width:900px) {
+  .studio.view-games .library.open {
+    display:flex; flex-direction:column; height:auto;
+    padding:10px 14px 4px;
+    bottom:var(--mobile-menu-space);
+  }
+}

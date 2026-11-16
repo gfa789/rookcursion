@@ -27,7 +27,9 @@ export default function GamesList({games,selected,loading,onSelect,active,memory
     const observer=new IntersectionObserver(([entry])=>{if(entry.isIntersecting&&root.clientHeight)setLimit(n=>Math.min(games.length,Math.max(n,visibleLimit)+24));},{root,rootMargin:'200px'});
     observer.observe(end);return()=>observer.disconnect();
   },[visibleLimit,games.length,active]);
-  return <div className="game-cards game-scroll" ref={listRef} role="region" aria-label="Games list" tabIndex={0} onScroll={remember}>
+  return <section className="games-ledger" aria-label="Game history">
+    <div className="games-columns" aria-hidden="true"><span>Opponent</span><span>Result</span><span>Accuracy</span></div>
+    <div className="game-cards game-scroll" ref={listRef} role="region" aria-label="Games list" tabIndex={0} onScroll={remember}>
     {loading&&<LoadingSkeleton view="games" label="Loading games"/>}
     {games.slice(0,visibleLimit).map(game=>{
       const result={win:'Win',loss:'Loss',draw:'Draw'}[game.result];
@@ -42,10 +44,10 @@ export default function GamesList({games,selected,loading,onSelect,active,memory
           <span className="game-date">{date(game.ended)}</span>
         </span>
         {Number.isFinite(accuracy)&&<span className="saved-quality" aria-label={`Review accuracy ${accuracy}%`}>
-          {accuracy}%<small>Accuracy</small>
+          {accuracy}%
         </span>}
       </button>;
     })}
     <div className="games-list-end" ref={endRef} role="status">{loading?'':!games.length?'No games found.':visibleLimit<games.length?'Loading more...':`${games.length.toLocaleString('en-GB')} games · all shown`}</div>
-  </div>;
+  </div></section>;
 }

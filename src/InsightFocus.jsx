@@ -1,14 +1,14 @@
 import React,{useState} from 'react';
 
 const percent=value=>value==null?'—':value.toFixed(1)+'%';
-export default function InsightFocus({data,view,onOpenGame}){
+export default function InsightFocus({data,view}){
   const [selected,setSelected]=useState(null);
   const [clockControl,setClockControl]=useState('blitz');
   const coaching=data.coaching,decisions=data.decisions;
   let rows=[],note='',unit='Error rate',title=({Recovery:'After a mistake',Conversion:'Winning from ahead or behind','Move timing':'When mistakes happen'})[view]??view;
   if(view==='Recovery'){
     rows=[
-      {name:'After an error',...coaching?.recovery.afterError,sources:coaching?.recovery.sources},
+      {name:'After an error',...coaching?.recovery.afterError},
       {name:'After other moves',...coaching?.recovery.afterOther}
     ].filter(r=>r.moves!==undefined).map(r=>({...r,value:r.errorRate,sample:r.moves+' moves'}));
     note='How often your next move is another mistake or blunder.';
@@ -25,8 +25,8 @@ export default function InsightFocus({data,view,onOpenGame}){
     const clocks=decisions?.clocks??[];
     const clock=clocks.find(c=>c.control===clockControl)??clocks[0];
     rows=(clock?[clock]:[]).flatMap(c=>[
-      {name:c.control+' · low clock',value:c.low.balancedRate,sample:c.low.balancedMoves+' moves'+(c.low.balancedMoves<30?' � small sample':''),sources:c.low.sources},
-      {name:c.control+' · more time',value:c.normal.balancedRate,sample:c.normal.balancedMoves+' moves'+(c.normal.balancedMoves<30?' � small sample':'')}
+      {name:c.control+' · low clock',value:c.low.balancedRate,sample:c.low.balancedMoves+' moves'+(c.low.balancedMoves<30?' · small sample':'')},
+      {name:c.control+' · more time',value:c.normal.balancedRate,sample:c.normal.balancedMoves+' moves'+(c.normal.balancedMoves<30?' · small sample':'')}
     ]);
     note='Balanced positions (−2 to +2). Low clock ≤10% of starting time, capped at 60s. Groups can differ in difficulty.';
   }
@@ -44,6 +44,6 @@ export default function InsightFocus({data,view,onOpenGame}){
       </button>)}
       {!rows.length&&<p>No data for this selection.</p>}
     </div>
-    <footer>{current?.detail&&<p>{current.detail}</p>}{source&&<button className="insight-action" onClick={()=>onOpenGame(source.id,source.index??-1)}>Review vs {source.opponent} ↗</button>}</footer>
+    <footer>{current?.detail&&<p>{current.detail}</p>}</footer>
   </section>;
 }
