@@ -100,3 +100,17 @@
 }
 .study-insights-content .loading-insights { overflow:hidden; grid-template-rows:24px minmax(30px,1fr) 16px 16px; }.study-insights-content .loading-insights .skeleton-chart { height:auto; min-height:0; }
 @media(max-height:650px){.focus-bars{gap:2px;}.focus-bar{padding-block:2px;}}
+
+.studio .study-ratings > .rating-intro { min-width:0; }
+.studio .rating-intro h2,.focus-chart header h2 { margin:0; font-size:20px; }
+.studio .rating-intro p,.focus-chart header p,.studio .trend-heading p { margin:3px 0 0; font-size:12px; line-height:1.35; color:var(--muted); }
+.focus-chart header { display:block; }
+.focus-chart footer:empty { display:none; }
+.studio .rating-legend button[aria-pressed=true] { box-shadow:inset 0 0 0 2px var(--series-colour); }
+@media(max-height:650px){
+  .studio .trend-heading p { display:block; }
+  .studio .rating-intro p,.focus-chart header p,.studio .trend-heading p { font-size:11px; }
+  .studio .trend-examples h3 { display:none; }
+  .studio .trend-card .trend-chart { min-height:42px; }
+  .focus-chart > select { min-height:40px; }
+}

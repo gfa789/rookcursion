@@ -8,7 +8,7 @@ const PERIODS=[['all','All time','All recorded games'],['ytd','YTD','Since 1 Jan
 const colours={rapid:'#a52a5b',blitz:'#8c4d14',bullet:'#236985',daily:'#486e45'};
 const fmt=n=>n===null||n===undefined?'â€”':Number(n).toLocaleString('en-GB');
 const date=n=>n?new Date(n*1000).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric',timeZone:'Europe/London'}):'â€”';
-function RatingChart({ratings,period,focus,onFocus,onReset,onPoint}){
+function RatingChart({ratings,focus,onFocus,onReset,onPoint}){
   const ref=useRef(null),[size,setSize]=useState({width:640,height:240});
   useEffect(()=>{const node=ref.current;if(!node)return;const observer=new ResizeObserver(([entry])=>{const {width,height}=entry.contentRect;if(width>0&&height>0)setSize({width:Math.round(width),height:Math.round(height)});});observer.observe(node);return()=>observer.disconnect();},[]);
   const series=ratings.filter(r=>!focus||r.control===focus),points=series.flatMap(r=>r.points),values=points.map(p=>p.rating),times=points.map(p=>p.ended);
@@ -36,20 +36,23 @@ function RatingChart({ratings,period,focus,onFocus,onReset,onPoint}){
       onPointerUp={e=>{if(consumed.current)seekRating(e);ratingGesture.current=null;}}
       onPointerLeave={()=>{ratingGesture.current=null;}}
       onPointerCancel={()=>{ratingGesture.current=null;}}>{[0,.5,1].map(t=><g key={t}><line x1={left} x2={right} y1={top+t*(bottom-top)} y2={top+t*(bottom-top)} stroke="var(--line)" strokeDasharray="3 5"/><text x="0" y={top+4+t*(bottom-top)}>{fmt(Math.round(max-(max-min)*t))}</text></g>)}{first!==last&&<line x1={left+cursor*(right-left)} x2={left+cursor*(right-left)} y1={top} y2={bottom} stroke="var(--accent)" opacity=".55"/>}{series.map(r=><g key={r.control}><polyline points={r.points.map(p=>`${x(p)},${y(p)}`).join(' ')} fill="none" stroke={colours[r.control]} strokeWidth="2.4" vectorEffect="non-scaling-stroke"/>{r.points.map((p,i)=><g key={p.ended+':'+i} role="button" tabIndex={0} aria-label={`${r.control}, ${date(p.ended)}, rating ${p.rating}, ${p.games?.length||0} ${(p.games?.length||0)===1?'game':'games'}. Open games`} onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();openPoint(r.control,p);}}}><circle className="rating-hit" cx={x(p)} cy={y(p)} r="12" fill="transparent"/><circle className="rating-dot" cx={x(p)} cy={y(p)} r="3" fill={colours[r.control]} pointerEvents="none"/></g>)}</g>)}{first===last?<text x={(left+right)/2} y={h-5} textAnchor="middle">{axisDate(first)}</text>:<><text x={left} y={h-5}>{axisDate(first)}</text><text x={right} y={h-5} textAnchor="end">{axisDate(last)}</text></>}</svg>:<div className="insight-empty"><strong>No rated games in this period</strong><button className="insight-action" onClick={onReset}>Show all time</button></div>}</div>
-    {!!series.length&&<div className={`rating-legend ${focus?'focused':''}`}>{series.map(r=><button key={r.control} style={{'--series-colour':colours[r.control]}} onClick={()=>onFocus(r.control)} aria-label={`${r.control} rating ${fmt(r.current)}, change ${r.change>=0?'+':''}${r.change}. Filter rating series`}><span><i/>{r.control}</span><strong>{fmt(r.current)}</strong><small className={r.change<0?'negative':''}>{r.change>=0?'+':''}{fmt(r.change)}</small></button>)}</div>}
-    {focus&&series[0]&&<div className="rating-details"><div><span>Period start</span><b>{fmt(series[0].start)}</b></div><div><span>Period peak</span><b>{fmt(series[0].peak)}</b></div><div><span>Rated games</span><b>{fmt(series[0].games)}</b></div></div>}
-    {!!points.length&&<p className="chart-note">{period.bucket==='month'?'Monthly':period.bucket==='week'?'Weekly':'Daily'} checkpoints Â· tap to see games or swipe to seek</p>}
+    {!!series.length&&<div className="rating-legend">{ratings.map(r=><button aria-pressed={focus===r.control} key={r.control} style={{'--series-colour':colours[r.control]}} onClick={()=>onFocus(r.control)} aria-label={`${r.control} rating ${fmt(r.current)}, change ${r.change>=0?'+':''}${r.change}. Filter rating series`}><span><i/>{r.control}</span><strong>{fmt(r.current)}</strong><small className={r.change<0?'negative':''}>{r.change>=0?'+':''}{fmt(r.change)}</small></button>)}</div>}
   </section>;
 }
-const SECTIONS=['Overall','Openings','Patterns'];
+const MISTAKE_VIEWS=[
+  ['patterns','Recurring patterns'],['Move timing','When mistakes happen'],
+  ['Recovery','After a mistake'],['Clock pressure','Clock pressure'],
+  ['Conversion','Winning from ahead or behind'],
+];
+const SECTIONS=['Ratings','Openings','Mistakes'];
 const openingKey=opening=>JSON.stringify([opening.name,opening.color]);
 
 export default function Insights({active=true,onOpenGame,onDrill}){
-  const [section,setSection]=useState('Overall'),[scope,setScope]=useState('all'),[range,setRange]=useState('all');
+  const [section,setSection]=useState('Ratings'),[scope,setScope]=useState('all'),[range,setRange]=useState('all');
   const [data,setData]=useState(null),[error,setError]=useState(''),[reload,setReload]=useState(0);
-  const [openingChoice,setOpeningChoice]=useState(null),[patternChoice,setPatternChoice]=useState(null);
+  const [openingChoice,setOpeningChoice]=useState(null),[patternChoice,setPatternChoice]=useState('all');
   const [ratingFocus,setRatingFocus]=useState(null),[ratingPoint,setRatingPoint]=useState(null);
-  const [overview,setOverview]=useState('Ratings');
+  const [mistakeView,setMistakeView]=useState('patterns');
   useEffect(()=>{
     if(!active)return;
     const controller=new AbortController();
@@ -99,24 +102,35 @@ export default function Insights({active=true,onOpenGame,onDrill}){
           {PERIODS.map(([key,label])=><option key={key} value={key}>{label}</option>)}
         </select></label>
       </div>
-      <label className="insight-view-select">{section==='Overall'?'View':section==='Openings'?'Opening':'Pattern'}
-        <select value={section==='Overall'?overview:section==='Openings'?(allOpenings?'all':opening?openingKey(opening):'all'):(allPatterns?'all':pattern?.name??'all')}
-          onChange={e=>section==='Overall'?setOverview(e.target.value):section==='Openings'?setOpeningChoice(e.target.value):setPatternChoice(e.target.value)}>
-          {section==='Overall'?['Ratings','Recovery','Conversion','Move timing','Clock pressure','Opponents'].map(name=><option key={name}>{name}</option>):<>
-            <option value="all">{section==='Openings'?'Compare top six':'Compare all'}</option>
-            {(section==='Openings'?openings:patterns).map(item=><option key={section==='Openings'?openingKey(item):item.name} value={section==='Openings'?openingKey(item):item.name}>{item.name}{section==='Openings'?' · '+(item.color==='w'?'White':'Black'):''}</option>)}
-          </>}
+      {section==='Openings'&&<label className="insight-view-select">Opening
+        <select value={allOpenings||!opening?'all':openingKey(opening)} onChange={e=>setOpeningChoice(e.target.value)}>
+          <option value="all">Six most-played openings</option>
+          {openings.map(item=><option key={openingKey(item)} value={openingKey(item)}>{item.name} · {item.color==='w'?'White':'Black'}</option>)}
         </select>
-      </label>
+      </label>}
+      {section==='Mistakes'&&<label className="insight-view-select">Topic
+        <select value={mistakeView==='patterns'?(allPatterns||!pattern?'patterns':'pattern:'+pattern.name):mistakeView}
+          onChange={e=>{
+            const value=e.target.value;
+            if(value.startsWith('pattern:')||value==='patterns'){
+              setMistakeView('patterns');
+              setPatternChoice(value==='patterns'?'all':value.slice(8));
+            }else setMistakeView(value);
+          }}>
+          {MISTAKE_VIEWS.map(([value,label])=><option key={value} value={value}>{label}</option>)}
+          {patterns.length>0&&<optgroup label="Individual patterns">
+            {patterns.map(item=><option key={item.name} value={'pattern:'+item.name}>{item.name}</option>)}
+          </optgroup>}
+        </select>
+      </label>}
     </aside>
     <div className="study-insights-content">
-      <header className="insights-heading"><h1>{section==='Overall'?'Study insights':section}</h1>{fresh&&<span>{fmt(fresh.total)} games</span>}</header>
       {error&&<div className="insight-error" role="alert">{error} <button className="insight-action" onClick={()=>setReload(n=>n+1)}>Retry</button></div>}
       {!fresh&&!error&&<LoadingSkeleton view="insights" label="Loading insights"/>}
       {fresh&&<>
-        {section==='Overall'&&overview==='Ratings'&&<section className="study-ratings">
-          <h2>Rating trajectory</h2>
-          <RatingChart ratings={fresh.ratings} period={fresh.period} focus={ratingFocus}
+        {section==='Ratings'&&<section className="study-ratings">
+          <header className="rating-intro"><h2>Rating history</h2><p>Each line tracks one time control. Tap a point to see the rating and a game from that date.</p></header>
+          <RatingChart ratings={fresh.ratings} focus={ratingFocus}
             onFocus={control=>{setRatingFocus(ratingFocus===control?null:control);setRatingPoint(null);}}
             onReset={()=>chooseFilter(setRange,'all')} onPoint={(control,point)=>setRatingPoint({control,point})}/>
           {ratingSelection&&<div className="trend-examples rating-sources">
@@ -126,8 +140,8 @@ export default function Insights({active=true,onOpenGame,onDrill}){
             </button>)}
           </div>}
         </section>}
-        {section==='Overall'&&overview!=='Ratings'&&<InsightFocus key={overview+scope+range} data={fresh} view={overview} onOpenGame={onOpenGame}/>}
-        {section!=='Overall'&&<StudyTrends key={`${scope}:${range}:${section}`} data={fresh} section={section} opening={opening}
+        {section==='Mistakes'&&mistakeView!=='patterns'&&<InsightFocus key={mistakeView+scope+range} data={fresh} view={mistakeView} onOpenGame={onOpenGame}/>}
+        {(section==='Openings'||section==='Mistakes'&&mistakeView==='patterns')&&<StudyTrends key={`${scope}:${range}:${section}`} data={fresh} section={section==='Mistakes'?'Patterns':section} opening={opening}
           pattern={pattern} allOpenings={allOpenings} allPatterns={allPatterns} onOpenGame={onOpenGame} onDrill={name=>onDrill(scope,name)}/>}
       </>}
     </div>

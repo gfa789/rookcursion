@@ -149,7 +149,7 @@ export default function StudyTrends({data,section,opening,pattern:theme,allOpeni
 
   return <div className="study-trends">
     <p className="trend-coverage">{resolution} samples Â· {coverage}. Gaps indicate no sample.</p>
-    {section==='Patterns'&&<TrendChart key={allPatterns?'all-patterns':theme?.name} {...common} title={allPatterns?'Compare mistake patterns':theme?.name??'Recurring mistakes'} description="Occurrences per 100 reviewed moves."
+    {section==='Patterns'&&<TrendChart key={allPatterns?'all-patterns':theme?.name} {...common} title={allPatterns?'Compare mistake patterns':theme?.name??'Recurring mistakes'} description="How often each mistake shows up per 100 reviewed moves."
       series={allPatterns?combinedPatterns:themeSeries} unit="" sample={p=>`${p.count} in ${p.total} moves`}
       sources={buckets.map((bucket,i)=>allPatterns?combineSources(combinedPatterns.map(line=>line.sources[i])):bucket.sources?.themes[theme?.name])}/>}
     {section==='Openings'&&allOpenings&&<div className="opening-metrics" aria-label="Opening comparison metric">
@@ -157,7 +157,7 @@ export default function StudyTrends({data,section,opening,pattern:theme,allOpeni
       <button aria-pressed={metric==='errors'} onClick={()=>setMetric('errors')}>Opening error rate</button>
     </div>}
     {section==='Openings'&&<TrendChart key={allOpenings?metric:opening&&openingKey(opening)} {...common} title={allOpenings?'Six most-played openings':opening?openingName(opening):'Opening results and errors'}
-      description={allOpenings?(metric==='score'?'Result score · draws count as half a point.':'Errors per 100 reviewed opening moves.'):'Game score and errors per 100 reviewed opening moves.'}
+      description={allOpenings?(metric==='score'?'Result score · draws count as half a point.':'Errors per 100 reviewed opening moves.'):'Result score counts draws as half a point. Opening errors are per 100 reviewed opening moves.'}
       series={allOpenings?combinedOpenings:openingSeries} unit="%" fixedMaximum={100}
       sample={p=>metric==='score'?`${number.format(p.count)} points in ${p.total} games`:`${p.count} of ${p.total} reviewed opening moves`}
       sources={buckets.map((bucket,i)=>allOpenings?combineSources(combinedOpenings.map(line=>line.sources[i])):opening&&bucket.sources?.openings[openingKey(opening)])}/>}
