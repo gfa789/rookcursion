@@ -1,6 +1,7 @@
 import React,{useEffect,useMemo,useRef,useState} from 'react';
+import LoadingSkeleton from './LoadingSkeleton.jsx';
 import {Chess} from 'chess.js';
-import {Board} from './Board.jsx';
+import {Board,PromotionPicker} from './Board.jsx';
 import './puzzles.css';
 
 async function request(route,body,token,signal){
@@ -27,6 +28,7 @@ export default function Puzzles({token,onOpenGame,mode='puzzles',active=true,ini
   useEffect(()=>{activeRef.current=active;if(active)readRef.current?.();},[active]);
   useEffect(()=>{
     const controller=new AbortController();const version=++generation.current;let assigned=false,inFlight=false;
+    setMeta(null);
     clearTimeout(replyTimer.current);setPuzzle(null);setSession(null);setResult(null);setSelected(null);setMessage('');setPromotion(null);setError('');setLineIndex(0);setCompleted(0);setPlayed(null);setBusy(false);setIdea('');
     if(!token)return()=>controller.abort();
     async function read(){
@@ -81,7 +83,9 @@ export default function Puzzles({token,onOpenGame,mode='puzzles',active=true,ini
     setSelected(board.get(square)?.color===puzzle.color?square:null);
   }
   function drop(from,to){
-    if(!tryMove(from,to))setSelected(null);
+    const accepted=tryMove(from,to);
+    if(!accepted)setSelected(null);
+    return accepted;
   }
   async function next(){
     if(busy)return;
@@ -89,11 +93,12 @@ export default function Puzzles({token,onOpenGame,mode='puzzles',active=true,ini
     setSheet(null);setExclude(puzzle?.id||'');setRound(n=>n+1);
   }
   function dismiss(){setSheet(null);openSheet.current?.focus();}
+  if(!puzzle&&!error&&(!meta||meta.generating))return <LoadingSkeleton view={mode} label={mode==='learn'?'Loading an opening lesson':'Loading a tactical position'}/>;
   return <section className="puzzles-panel" aria-label={mode==='learn'?'Opening lessons':'Personalised puzzles'}>
     <header className="practice-heading"><h1>{mode==='learn'?'Opening practice':'Tactical practice'}</h1></header>
-    <section className="puzzle-idea" aria-label="Move idea"><div className="idea-heading"><strong title={mode==='learn'?puzzle?.opening:undefined}>{mode==='learn'?(puzzle?.openingFamily||'Your openings'):targeted?theme:'The idea'}</strong><span role="status" aria-live="polite">{result?`${result.correct?'Solved':'Solution'} · ${result.line[lineIndex]||''}`:message||(puzzle?`${puzzle.color==='w'?'White':'Black'} to move`:'Preparing…')}</span></div><Idea text={result?(result.ideas?.[lineIndex]||result.explanation):(idea||'Preparing a position from your games…')}/></section>
+    <section className={`puzzle-idea ${result?.correct?'practice-solved':''}`} aria-label="Move idea"><div className="idea-heading"><strong title={mode==='learn'?puzzle?.opening:undefined}>{mode==='learn'?(puzzle?.openingFamily||'Your openings'):targeted?theme:'The idea'}</strong><span role="status" aria-live="polite">{result?`${result.correct?'Solved':'Solution'} · ${result.line[lineIndex]||''}`:message||(puzzle?`${puzzle.color==='w'?'White':'Black'} to move`:'Preparing…')}</span></div><Idea text={result?(result.ideas?.[lineIndex]||result.explanation):(idea||'Preparing a position from your games…')}/></section>
     {(error||meta?.error)&&<div className="puzzle-error" role="alert">{error||meta.error}<button onClick={()=>setRound(n=>n+1)}>Retry</button></div>}
-    {puzzle?<><div className="puzzle-board-slot"><div className="puzzle-board-wrap"><Board fen={shown} flipped={puzzle.color==='b'} onSquare={result?undefined:choose} onDrop={busy||result||promotion?undefined:drop} selected={selected} targets={targets} played={result?.pv[lineIndex]||played}/>{promotion&&<div className="puzzle-promotion" role="dialog" aria-label="Choose promotion"><strong>Promote to</strong>{[['q','Queen'],['r','Rook'],['b','Bishop'],['n','Knight']].map(([p,label])=><button key={p} onClick={()=>submit({move:promotion.from+promotion.to+p})}>{label}</button>)}<button onClick={()=>setPromotion(null)}>Cancel</button></div>}</div></div>
+    {puzzle?<><div className="puzzle-board-slot"><div className="puzzle-board-wrap"><Board fen={shown} flipped={puzzle.color==='b'} onSquare={result?undefined:choose} onDrop={!active||busy||result||promotion?undefined:drop} selected={selected} targets={targets} played={result?.pv[lineIndex]||played}/>{promotion&&<PromotionPicker onChoose={piece=>submit({move:promotion.from+promotion.to+piece})} onCancel={()=>setPromotion(null)}/>}</div></div>
       <nav className="puzzle-actions" aria-label={mode==='learn'?'Lesson controls':'Puzzle controls'}>{result?<><button aria-label="Previous solution position" disabled={lineIndex===0} onClick={()=>setLineIndex(n=>n-1)}><ControlIcon name="left"/><span>Prev move</span></button><button aria-label="Next solution position" disabled={lineIndex>=result.pv.length-1} onClick={()=>setLineIndex(n=>n+1)}><ControlIcon name="right"/><span>Next move</span></button><button ref={openSheet} aria-label="Practice options" onClick={()=>setSheet('filters')}><ControlIcon name="options"/><span>Options</span></button><button className="puzzle-next" onClick={next} aria-label={mode==='learn'?'Next lesson':'Next puzzle'}><ControlIcon name="next"/><span>{mode==='learn'?'Next lesson':'Next puzzle'}</span></button></>:<><button disabled={busy||!session} onClick={()=>submit({action:'hint'})}><ControlIcon name="hint"/><span>Hint</span></button><button disabled={busy||!session} onClick={()=>submit({action:'reveal'})}><ControlIcon name="reveal"/><span>Reveal</span></button><button ref={openSheet} disabled={busy} aria-label="Practice options" onClick={()=>setSheet('filters')}><ControlIcon name="options"/><span>Options</span></button><button className="puzzle-next" onClick={next} disabled={busy}><ControlIcon name="next"/><span>Skip</span></button></>}</nav></>:<div className="puzzle-empty"><span aria-hidden="true">♞</span><h2>{meta?.generating?(mode==='learn'?'Preparing opening lessons…':'Preparing puzzles…'):meta?.waiting?'You’re up to date.':meta&&!meta.generating?(mode==='learn'?'No matching lesson yet.':'No matching puzzle yet.'):'Finding your next puzzle…'}</h2><button onClick={()=>setSheet('filters')}>Change filters</button><button onClick={()=>{setExclude('');setRound(n=>n+1);}}>Try again</button></div>}
     {sheet&&<div className="puzzle-overlay" onClick={dismiss}><section className="puzzle-sheet" role="dialog" aria-modal="true" aria-label="Practice options" onClick={e=>e.stopPropagation()} onKeyDown={e=>{if(e.key==='Escape')dismiss();if(e.key==='Tab'){const nodes=[...e.currentTarget.querySelectorAll('button:not(:disabled),select')],first=nodes[0],last=nodes.at(-1);if(e.shiftKey&&document.activeElement===first){e.preventDefault();last?.focus();}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first?.focus();}}}}><header><h2>{mode==='learn'?'Your openings':'Practice options'}</h2><button ref={closeSheet} aria-label="Close puzzle panel" onClick={dismiss}>×</button></header>{<><div className="puzzle-scopes" aria-label="Puzzle time control">{['all','rapid','blitz','bullet'].map(s=><button key={s} aria-pressed={scope===s} onClick={()=>{setScope(s);setTheme('all');setExclude('');}}>{s==='all'?'All games':s}</button>)}</div><label>{mode==='learn'?'Opening':'Weakness'}<select aria-label={mode==='learn'?'Practice opening':'Practice weakness'} value={theme} onChange={e=>{setTheme(e.target.value);setExclude('');}}><option value="all">{mode==='learn'?'All your openings':'Mixed weaknesses'}</option>{meta?.themes.map(t=><option key={t.name} value={t.name}>{t.name}</option>)}</select></label><button className="puzzle-next" onClick={dismiss}>Back to board</button></>}{result&&<button onClick={()=>onOpenGame(result.gameId,result.index)}>Original game vs {puzzle.opponent} ↗</button>}</section></div>}
   </section>;

@@ -5,4 +5,5 @@ import './style.css';
 import './mobile-review.css';
 import './afterboard.css';
 import './scorebook.css';
+import './workspace-polish.css';
 createRoot(document.getElementById('root')).render(<Studio/>);

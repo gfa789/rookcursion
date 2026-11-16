@@ -10,37 +10,17 @@ const labelDate=date=>new Date(date+(date.length===7?'-01':'')+'T00:00:00Z').toL
 });
 const plotHeight=180,plotTop=18,plotBottom=142;
 
-function TrendChart({title,description,dates,series,unit,sample,details,fixedMaximum,active,sources,onOpenGame}){
+function TrendChart({title,description,dates,series,unit,sample,details,fixedMaximum,sources,onOpenGame}){
   const id=useId();
   const latest=Math.max(0,dates.length-1);
   const lastSample=dates.findLastIndex((_,i)=>series.some(line=>line.points[i]?.total));
   const initial=Math.max(0,lastSample);
-  const [playhead,setPlayhead]=useState(initial),[selected,setSelected]=useState(initial);
-  const chart=useRef(null),drag=useRef(null),resumeAt=useRef(0);
+  const [selected,setSelected]=useState(initial);
+  const [highlight,setHighlight]=useState(null);
+  const drag=useRef(null);
   const datesKey=dates.join(',');
-  useEffect(()=>{
-    setPlayhead(initial);setSelected(initial);resumeAt.current=0;
-  },[datesKey,initial]);
-  useEffect(()=>{
-    const node=chart.current;
-    if(!node||!active||latest<1)return;
-    const reduced=matchMedia('(prefers-reduced-motion: reduce)');
-    let visible=false;
-    const observer=new IntersectionObserver(([entry])=>{visible=entry.isIntersecting;});
-    observer.observe(node);
-    const timer=setInterval(()=>{
-      if(visible&&!document.hidden&&!reduced.matches&&!drag.current&&Date.now()>=resumeAt.current){
-        setPlayhead(position=>(position+1)%(latest+1));
-      }
-    },Math.max(85,Math.min(420,5200/(latest+1))));
-    return()=>{observer.disconnect();clearInterval(timer);};
-  },[active,latest,datesKey]);
-  function seek(index){
-    const next=Math.max(0,Math.min(latest,index));
-    setPlayhead(next);
-    setSelected(next);
-    resumeAt.current=Date.now()+750;
-  }
+  useEffect(()=>{setSelected(initial);setHighlight(null);},[datesKey,initial]);
+  function seek(index){setSelected(Math.max(0,Math.min(latest,index)));}
   function pointerIndex(event){
     const bounds=event.currentTarget.getBoundingClientRect();
     return Math.round(((event.clientX-bounds.left)/bounds.width*600-15)/570*latest);
@@ -69,23 +49,26 @@ function TrendChart({title,description,dates,series,unit,sample,details,fixedMax
     event.preventDefault();seek(next);
   }
   const current=Math.min(selected,latest);
-  const moving=Math.min(playhead,latest);
   const width=600;
   const maximum=fixedMaximum??Math.max(2,Math.ceil(Math.max(0,...series.flatMap(line=>line.points.map(value)))/2)*2);
   const x=i=>latest?15+i/latest*570:300;
   const y=v=>plotBottom-v/maximum*(plotBottom-plotTop);
   const ticks=[...new Set([0,Math.floor(latest/2),latest])];
-  const sourceGames=sources?.[current]??[];
+  const sourceGames=highlight&&series.find(line=>line.name===highlight)?.sources
+    ?series.find(line=>line.name===highlight).sources[current]??[]:sources?.[current]??[];
+  const seriesColour=i=>series.length<=3?colours[i]:`hsl(${(i*137.508+330)%360} 62% ${34+(i%3)*5}%)`;
   const noSamples=!series.some(line=>line.points.some(point=>point?.total));
   return <section className="insight-card trend-card" aria-labelledby={id}>
     <div className="trend-heading"><h2 id={id}>{title}</h2><p>{description}</p></div>
     {noSamples?<p className="trend-empty">No data for these filters yet.</p>:<>
-      <div className="trend-values" aria-live="polite">
+      <div className={`trend-values ${series.length>3?'trend-many-values':''}`} aria-live="polite">
         <strong>{labelDate(dates[current])}</strong>
         {series.map((line,i)=>{
           const point=line.points[current],v=value(point);
           return <div key={line.name}>
-            <span><i style={{background:colours[i]}}/>{line.name}</span>
+            <button className="trend-series" aria-pressed={highlight===line.name} onClick={()=>setHighlight(highlight===line.name?null:line.name)}>
+              <i style={{background:seriesColour(i)}}/>{line.name}
+            </button>
             <b>{v===null?'—':number.format(v)+unit}</b>
             <small>{point?.total?(line.sample??sample)(point):'No sample'}</small>
           </div>;
@@ -93,14 +76,13 @@ function TrendChart({title,description,dates,series,unit,sample,details,fixedMax
       </div>
       <div className="trend-chart">
         <div className="trend-axis" aria-hidden="true">{[maximum,maximum/2,0].map(v=><span key={v}>{number.format(v)}{unit}</span>)}</div>
-        <div className="trend-plot" ref={chart} onPointerDown={start} onPointerMove={move}
+        <div className="trend-plot" onPointerDown={start} onPointerMove={move}
           onPointerUp={e=>finish(e)} onPointerCancel={e=>finish(e,true)} onLostPointerCapture={e=>finish(e,true)}
           onKeyDown={keyboard} tabIndex={0} role="region"
           aria-label={title+' timeline. Swipe or use left and right arrow keys to inspect a date.'}>
           <svg viewBox={`0 0 ${width} ${plotHeight}`} preserveAspectRatio="none" aria-hidden="true">
             {[maximum,maximum/2,0].map(v=><line key={v} x1="0" x2={width} y1={y(v)} y2={y(v)} stroke="var(--line)" strokeDasharray="3 4"/>)}
             <line x1={x(current)} x2={x(current)} y1={plotTop} y2={plotBottom} stroke="var(--quiet)" strokeDasharray="4 4"/>
-            <line x1={x(moving)} x2={x(moving)} y1={plotTop} y2={plotBottom} stroke="var(--accent)" opacity=".65"/>
             {series.map((line,lineIndex)=>{
               const parts=[];
               let part=[];
@@ -110,10 +92,10 @@ function TrendChart({title,description,dates,series,unit,sample,details,fixedMax
                 else part.push([x(i),y(v),i]);
               });
               if(part.length)parts.push(part);
-              return <g key={line.name} stroke={colours[lineIndex]} fill={colours[lineIndex]}>
+              return <g key={line.name} stroke={seriesColour(lineIndex)} fill={seriesColour(lineIndex)} opacity={highlight?(highlight===line.name?1:.14):series.length>12?0.64:1}>
                 {parts.map(segment=><g key={segment[0][2]}>
-                  <polyline fill="none" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" points={segment.map(([px,py])=>px+','+py).join(' ')}/>
-                  {segment.map(([px,py,i])=><circle key={i} cx={px} cy={py} r={i===current?5:2.5}/>)}
+                  <polyline fill="none" strokeWidth={series.length>12&&highlight!==line.name?1.4:2.5} strokeLinecap="round" strokeLinejoin="round" points={segment.map(([px,py])=>px+','+py).join(' ')}/>
+                  {segment.map(([px,py,i])=><circle key={i} cx={px} cy={py} r={series.length>12&&highlight!==line.name?1.4:i===current?5:2.5}/>)}
                 </g>)}
               </g>;
             })}
@@ -133,7 +115,8 @@ function TrendChart({title,description,dates,series,unit,sample,details,fixedMax
   </section>;
 }
 
-export default function StudyTrends({data,section,opening,pattern:theme,onOpenGame,onDrill,active}){
+export default function StudyTrends({data,section,opening,pattern:theme,allOpenings,allPatterns,onOpenGame,onDrill}){
+  const [metric,setMetric]=useState('score');
   const buckets=data.trends??[];
   const dates=buckets.map(bucket=>bucket.date);
   const openingKey=o=>JSON.stringify([o.name,o.color]);
@@ -152,21 +135,42 @@ export default function StudyTrends({data,section,opening,pattern:theme,onOpenGa
   ]:[];
   const coverage=`${number.format(data.reviewed)} of ${number.format(data.total)} games reviewed`;
   const resolution={month:'Monthly',week:'Weekly',day:'Daily'}[data.period.bucket];
-  const common={dates,active,onOpenGame};
+  const common={dates,onOpenGame};
+  const combineSources=groups=>[...new Map(groups.flat().map(game=>[game.id,game])).values()].sort((a,b)=>b.ended-a.ended).slice(0,3);
+  const combinedPatterns=allPatterns?data.patterns.map(item=>({
+    name:item.name,
+    points:buckets.map(b=>({count:b.themes[item.name]||0,total:b.moves})),
+    sources:buckets.map(b=>b.sources?.themes[item.name]??[]),
+  })):[];
+  const combinedOpenings=allOpenings?data.openings.map(item=>{
+    const key=openingKey(item);
+    return {name:openingName(item),sources:buckets.map(b=>b.sources?.openings[key]??[]),
+      points:buckets.map(b=>{
+        const sample=b.openings[key];
+        return sample?metric==='score'?{count:sample.score,total:sample.games}:{count:sample.errors,total:sample.moves}:null;
+      })};
+  }):[];
+
   return <div className="study-trends">
     {section==='Overall'&&<PracticeProgress stats={data.practice?.total} onDrill={()=>onDrill('all')}/>}
-    {section==='Patterns'&&<PracticeProgress name={theme?.name} stats={theme&&data.practice?.byTheme[theme.name]} onDrill={theme&&(()=>onDrill(theme.name))}/>}
+    {section==='Patterns'&&<PracticeProgress name={allPatterns?undefined:theme?.name} stats={allPatterns?data.practice?.total:theme&&data.practice?.byTheme[theme.name]} onDrill={allPatterns?()=>onDrill('all'):theme&&(()=>onDrill(theme.name))}/>}
     <p className="trend-coverage">{resolution} samples · {coverage}. Gaps indicate no sample.</p>
     {section==='Overall'&&<TrendChart {...common} title="Mistakes by phase" description="Inaccuracies, mistakes, and blunders per 100 reviewed moves in each phase."
       series={phaseSeries} unit="" sample={p=>`${p.count} of ${p.total} moves`}
       sources={buckets.map(bucket=>bucket.sources?.reviewed)}/>}
-    {section==='Patterns'&&<TrendChart key={theme?.name} {...common} title={theme?.name??'Recurring mistakes'} description="Occurrences per 100 reviewed moves."
-      series={themeSeries} unit="" sample={p=>`${p.count} in ${p.total} moves`}
-      sources={buckets.map(bucket=>bucket.sources?.themes[theme?.name])}/>}
-    {section==='Openings'&&<TrendChart key={opening&&openingKey(opening)} {...common} title={opening?openingName(opening):'Opening results and errors'}
+    {section==='Patterns'&&<TrendChart key={allPatterns?'all-patterns':theme?.name} {...common} title={allPatterns?'Compare mistake patterns':theme?.name??'Recurring mistakes'} description="Occurrences per 100 reviewed moves."
+      series={allPatterns?combinedPatterns:themeSeries} unit="" sample={p=>`${p.count} in ${p.total} moves`}
+      sources={buckets.map((bucket,i)=>allPatterns?combineSources(combinedPatterns.map(line=>line.sources[i])):bucket.sources?.themes[theme?.name])}/>}
+    {section==='Openings'&&allOpenings&&<div className="opening-metrics" aria-label="Opening comparison metric">
+      <button aria-pressed={metric==='score'} onClick={()=>setMetric('score')}>Result score</button>
+      <button aria-pressed={metric==='errors'} onClick={()=>setMetric('errors')}>Opening error rate</button>
+    </div>}
+    {section==='Openings'&&<TrendChart key={allOpenings?metric:opening&&openingKey(opening)} {...common} title={allOpenings?'Compare openings':opening?openingName(opening):'Opening results and errors'}
       description="Game score and errors per 100 reviewed opening moves."
-      series={openingSeries} unit="%" fixedMaximum={100} sources={buckets.map(bucket=>opening&&bucket.sources?.openings[openingKey(opening)])}/>}
-    <Comparison comparison={data.comparison} section={section} themes={theme?[theme]:[]} opening={section==='Openings'?opening:null}/>
+      series={allOpenings?combinedOpenings:openingSeries} unit="%" fixedMaximum={100}
+      sample={p=>metric==='score'?`${number.format(p.count)} points in ${p.total} games`:`${p.count} of ${p.total} reviewed opening moves`}
+      sources={buckets.map((bucket,i)=>allOpenings?combineSources(combinedOpenings.map(line=>line.sources[i])):opening&&bucket.sources?.openings[openingKey(opening)])}/>}
+    <Comparison comparison={data.comparison} section={section} themes={allPatterns?data.patterns:theme?[theme]:[]} opening={section==='Openings'&&!allOpenings?opening:null}/>
   </div>;
 }
 
