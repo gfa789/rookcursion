@@ -1,8 +1,9 @@
+import {coachingFact,coachingInsights} from './coaching.js';
 import {Chess} from 'chess.js';
 import {gameOpeningMoves} from './openings.js';
 import {expectedScore,VALUES} from './grading.js';
 
-export const FACT_VERSION=1;
+export const FACT_VERSION=2;
 const mean=values=>values.length?Math.round(values.reduce((a,b)=>a+b,0)/values.length*10)/10:null;
 const round=value=>Math.round(value*10)/10;
 export function phaseOf(row){
@@ -21,6 +22,7 @@ export function buildGameFact(game,review=null){
   let opening=review?.opening||null;
   if(!opening){try{opening=gameOpeningMoves(game.pgn).at(-1)?.opening;}catch{}}
   const fact={version:FACT_VERSION,id:game.id,ended:game.ended,timeClass:game.timeClass,color:game.color,result:game.result,rated:game.rated!==false,rating:me?.rating??null,opponentRating:opponent?.rating??null,opponent:game.opponent,opening:opening?.name||game.opening||'Unclassified opening',eco:opening?.eco||null,reviewed:!!review,depth:review?.depth||null,quality:review?.accuracy?.[game.color]??null,counts:{},phases:{},themes:{},examples:[],ownMoves:0};
+  fact.coaching=coachingFact(game,review);
   if(!review)return fact;
   for(const row of review.rows){
     if(row.color!==game.color)continue;
@@ -176,5 +178,5 @@ export function aggregateInsights(allFacts,scope='all',options={}){
   if(weakest)highlights.push({title:'Focus your next study session',body:`${weakest[0]}: ${round(weakest[1].errors/weakest[1].moves*100)} costly moves per 100 moves, based on ${weakest[1].moves} moves.`});
   if(!highlights.length)highlights.push({title:'Your history is being prepared',body:'Opening and result statistics appear as archives arrive. Engine-based insights build as reviews finish.'});
   const comparisonGames=allFacts.filter(f=>f.reviewed&&f.ended<=period.end&&(scope==='all'||f.timeClass===scope)).sort((a,b)=>a.ended-b.ended);
-  return {scope,period,comparison:compareReviewedGames(comparisonGames),trends:studyTrends(facts,openings,period.bucket),total:facts.length,reviewed:reviewed.length,coverage:facts.length?round(reviewed.length/facts.length*100):0,counts,score:score(facts),quality:mean(reviewed.map(f=>f.quality).filter(v=>v!==null)),ownMoves,grades,blundersPer100:ownMoves?round((grades.Blunder||0)/ownMoves*100):null,errorRate:ownMoves?round(((grades.Inaccuracy||0)+(grades.Mistake||0)+(grades.Blunder||0))/ownMoves*100):null,first:facts[0]?.ended||null,last:facts.at(-1)?.ended||null,recent:{games:recent.length,score:score(recent),previousScore:score(previous)},colours,openings,bestOpenings:ranked(-1),worstOpenings:ranked(1),minimumOpeningSample:5,patterns,phases:Object.entries(phases).map(([name,p])=>({name,...p,errorRate:round(p.errors/p.moves*100)})),ratings,examples,highlights,depths:[...new Set(reviewed.map(f=>f.depth))].sort((a,b)=>a-b)};
+  return {scope,period,coaching:coachingInsights([...facts].reverse()),comparison:compareReviewedGames(comparisonGames),trends:studyTrends(facts,openings,period.bucket),total:facts.length,reviewed:reviewed.length,coverage:facts.length?round(reviewed.length/facts.length*100):0,counts,score:score(facts),quality:mean(reviewed.map(f=>f.quality).filter(v=>v!==null)),ownMoves,grades,blundersPer100:ownMoves?round((grades.Blunder||0)/ownMoves*100):null,errorRate:ownMoves?round(((grades.Inaccuracy||0)+(grades.Mistake||0)+(grades.Blunder||0))/ownMoves*100):null,first:facts[0]?.ended||null,last:facts.at(-1)?.ended||null,recent:{games:recent.length,score:score(recent),previousScore:score(previous)},colours,openings,bestOpenings:ranked(-1),worstOpenings:ranked(1),minimumOpeningSample:5,patterns,phases:Object.entries(phases).map(([name,p])=>({name,...p,errorRate:round(p.errors/p.moves*100)})),ratings,examples,highlights,depths:[...new Set(reviewed.map(f=>f.depth))].sort((a,b)=>a-b)};
 }

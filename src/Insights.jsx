@@ -1,3 +1,4 @@
+import CoachingInsights from './CoachingInsights.jsx';
 import React,{useEffect,useLayoutEffect,useRef,useState} from 'react';
 import LoadingSkeleton from './LoadingSkeleton.jsx';
 import './insights.css';
@@ -131,6 +132,7 @@ export default function Insights({active=true,onOpenGame,onDrill}){
             </button>)}
           </div>}
         </section>}
+        {section==='Overall'&&<CoachingInsights data={fresh.coaching} onOpenGame={onOpenGame}/>}
         <StudyTrends key={`${scope}:${range}:${section}`} data={fresh} section={section} opening={opening}
           pattern={pattern} allOpenings={allOpenings} allPatterns={allPatterns} onOpenGame={onOpenGame} onDrill={name=>onDrill(scope,name)}/>
       </>}
