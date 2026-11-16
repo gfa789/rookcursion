@@ -99,3 +99,4 @@
   .studio .trend-values small { display:none; }
 }
 .study-insights-content .loading-insights { overflow:hidden; grid-template-rows:24px minmax(30px,1fr) 16px 16px; }.study-insights-content .loading-insights .skeleton-chart { height:auto; min-height:0; }
+@media(max-height:650px){.focus-bars{gap:2px;}.focus-bar{padding-block:2px;}}

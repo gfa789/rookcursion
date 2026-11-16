@@ -95,7 +95,7 @@ function TrendChart({title,description,dates,series,unit,sample,details,fixedMax
               return <g key={line.name} stroke={seriesColour(lineIndex)} fill={seriesColour(lineIndex)} opacity={highlight?(highlight===line.name?1:.14):series.length>12?0.64:1}>
                 {parts.map(segment=><g key={segment[0][2]}>
                   <polyline vectorEffect="non-scaling-stroke" fill="none" strokeWidth={series.length>12&&highlight!==line.name?1.4:2.5} strokeLinecap="round" strokeLinejoin="round" points={segment.map(([px,py])=>px+','+py).join(' ')}/>
-                  {segment.map(([px,py,i])=><circle key={i} cx={px} cy={py} r={series.length>12&&highlight!==line.name?1.4:i===current?5:2.5}/>)}
+                  {segment.map(([px,py,i])=><path key={i} d={`M${px} ${py}h.01`} vectorEffect="non-scaling-stroke" strokeLinecap="round" strokeWidth={i===current?7:4}/>)}
                 </g>)}
               </g>;
             })}
