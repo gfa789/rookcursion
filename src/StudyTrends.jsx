@@ -2,7 +2,6 @@ import React,{useEffect,useId,useRef,useState} from 'react';
 import './study-trends.css';
 
 const colours=['#a52a5b','#236985','#486e45'];
-const phases=['Opening','Middlegame','Endgame'];
 const number=new Intl.NumberFormat('en-GB',{maximumFractionDigits:1});
 const value=(point)=>point?.total?100*point.count/point.total:null;
 const labelDate=date=>new Date(date+(date.length===7?'-01':'')+'T00:00:00Z').toLocaleDateString('en-GB',{
@@ -63,15 +62,16 @@ function TrendChart({title,description,dates,series,unit,sample,details,fixedMax
     {noSamples?<p className="trend-empty">No data for these filters yet.</p>:<>
       <div className={`trend-values ${series.length>3?'trend-many-values':''}`} aria-live="polite">
         <strong>{labelDate(dates[current])}</strong>
-        {series.map((line,i)=>{
+        {series.length>3?<label className="series-picker">Series
+          <select value={highlight??''} onChange={e=>setHighlight(e.target.value||null)}>
+            <option value="">All {series.length} series</option>
+            {series.map((line,i)=><option key={line.name} value={line.name}>{line.name} � {value(line.points[current])===null?'�':number.format(value(line.points[current]))+unit}</option>)}
+          </select>
+        </label>:series.map((line,i)=>{
           const point=line.points[current],v=value(point);
-          return <div key={line.name}>
-            <button className="trend-series" aria-pressed={highlight===line.name} onClick={()=>setHighlight(highlight===line.name?null:line.name)}>
-              <i style={{background:seriesColour(i)}}/>{line.name}
-            </button>
-            <b>{v===null?'—':number.format(v)+unit}</b>
-            <small>{point?.total?(line.sample??sample)(point):'No sample'}</small>
-          </div>;
+          return <div key={line.name}><button className="trend-series" aria-pressed={highlight===line.name} onClick={()=>setHighlight(highlight===line.name?null:line.name)}>
+            <i style={{background:seriesColour(i)}}/>{line.name}
+          </button><b>{v===null?'�':number.format(v)+unit}</b><small>{point?.total?(line.sample??sample)(point):'No sample'}</small></div>;
         })}
       </div>
       <div className="trend-chart">
@@ -94,7 +94,7 @@ function TrendChart({title,description,dates,series,unit,sample,details,fixedMax
               if(part.length)parts.push(part);
               return <g key={line.name} stroke={seriesColour(lineIndex)} fill={seriesColour(lineIndex)} opacity={highlight?(highlight===line.name?1:.14):series.length>12?0.64:1}>
                 {parts.map(segment=><g key={segment[0][2]}>
-                  <polyline fill="none" strokeWidth={series.length>12&&highlight!==line.name?1.4:2.5} strokeLinecap="round" strokeLinejoin="round" points={segment.map(([px,py])=>px+','+py).join(' ')}/>
+                  <polyline vectorEffect="non-scaling-stroke" fill="none" strokeWidth={series.length>12&&highlight!==line.name?1.4:2.5} strokeLinecap="round" strokeLinejoin="round" points={segment.map(([px,py])=>px+','+py).join(' ')}/>
                   {segment.map(([px,py,i])=><circle key={i} cx={px} cy={py} r={series.length>12&&highlight!==line.name?1.4:i===current?5:2.5}/>)}
                 </g>)}
               </g>;
@@ -106,7 +106,7 @@ function TrendChart({title,description,dates,series,unit,sample,details,fixedMax
       <p className="trend-gesture">Swipe or drag to inspect a date</p>
       {sources&&<div className="trend-examples">
         <h3>Source games · {labelDate(dates[current])}</h3>
-        {sourceGames.length?sourceGames.map(game=><button key={game.id} onClick={()=>onOpenGame(game.id,game.index??-1)}>
+        {sourceGames.length?sourceGames.slice(0,1).map(game=><button key={game.id} onClick={()=>onOpenGame(game.id,game.index??-1)}>
           {game.san?`${game.san} vs ${game.opponent}`:`vs ${game.opponent}`} <span aria-hidden="true">↗</span>
         </button>):<p>No saved examples for this date.</p>}
       </div>}
@@ -121,10 +121,6 @@ export default function StudyTrends({data,section,opening,pattern:theme,allOpeni
   const dates=buckets.map(bucket=>bucket.date);
   const openingKey=o=>JSON.stringify([o.name,o.color]);
   const openingName=o=>o.name+(o.color==='w'?' as White':' as Black');
-  const phaseSeries=phases.map(name=>({name,points:buckets.map(bucket=>{
-    const phase=bucket.phases[name];
-    return phase?{count:phase.errors,total:phase.moves}:null;
-  })}));
   const themeSeries=theme?[{name:theme.name,points:buckets.map(bucket=>({count:bucket.themes[theme.name]||0,total:bucket.moves}))}]:[];
   const openingSamples=opening?buckets.map(bucket=>bucket.openings[openingKey(opening)]):[];
   const openingSeries=opening?[
@@ -142,7 +138,7 @@ export default function StudyTrends({data,section,opening,pattern:theme,allOpeni
     points:buckets.map(b=>({count:b.themes[item.name]||0,total:b.moves})),
     sources:buckets.map(b=>b.sources?.themes[item.name]??[]),
   })):[];
-  const combinedOpenings=allOpenings?data.openings.map(item=>{
+  const combinedOpenings=allOpenings?data.openings.slice(0,6).map(item=>{
     const key=openingKey(item);
     return {name:openingName(item),sources:buckets.map(b=>b.sources?.openings[key]??[]),
       points:buckets.map(b=>{
@@ -152,12 +148,7 @@ export default function StudyTrends({data,section,opening,pattern:theme,allOpeni
   }):[];
 
   return <div className="study-trends">
-    {section==='Overall'&&<PracticeProgress stats={data.practice?.total} onDrill={()=>onDrill('all')}/>}
-    {section==='Patterns'&&<PracticeProgress name={allPatterns?undefined:theme?.name} stats={allPatterns?data.practice?.total:theme&&data.practice?.byTheme[theme.name]} onDrill={allPatterns?()=>onDrill('all'):theme&&(()=>onDrill(theme.name))}/>}
     <p className="trend-coverage">{resolution} samples · {coverage}. Gaps indicate no sample.</p>
-    {section==='Overall'&&<TrendChart {...common} title="Mistakes by phase" description="Inaccuracies, mistakes, and blunders per 100 reviewed moves in each phase."
-      series={phaseSeries} unit="" sample={p=>`${p.count} of ${p.total} moves`}
-      sources={buckets.map(bucket=>bucket.sources?.reviewed)}/>}
     {section==='Patterns'&&<TrendChart key={allPatterns?'all-patterns':theme?.name} {...common} title={allPatterns?'Compare mistake patterns':theme?.name??'Recurring mistakes'} description="Occurrences per 100 reviewed moves."
       series={allPatterns?combinedPatterns:themeSeries} unit="" sample={p=>`${p.count} in ${p.total} moves`}
       sources={buckets.map((bucket,i)=>allPatterns?combineSources(combinedPatterns.map(line=>line.sources[i])):bucket.sources?.themes[theme?.name])}/>}
@@ -165,56 +156,11 @@ export default function StudyTrends({data,section,opening,pattern:theme,allOpeni
       <button aria-pressed={metric==='score'} onClick={()=>setMetric('score')}>Result score</button>
       <button aria-pressed={metric==='errors'} onClick={()=>setMetric('errors')}>Opening error rate</button>
     </div>}
-    {section==='Openings'&&<TrendChart key={allOpenings?metric:opening&&openingKey(opening)} {...common} title={allOpenings?'Compare openings':opening?openingName(opening):'Opening results and errors'}
-      description="Game score and errors per 100 reviewed opening moves."
+    {section==='Openings'&&<TrendChart key={allOpenings?metric:opening&&openingKey(opening)} {...common} title={allOpenings?'Six most-played openings':opening?openingName(opening):'Opening results and errors'}
+      description={allOpenings?(metric==='score'?'Result score � draws count as half a point.':'Errors per 100 reviewed opening moves.'):'Game score and errors per 100 reviewed opening moves.'}
       series={allOpenings?combinedOpenings:openingSeries} unit="%" fixedMaximum={100}
       sample={p=>metric==='score'?`${number.format(p.count)} points in ${p.total} games`:`${p.count} of ${p.total} reviewed opening moves`}
       sources={buckets.map((bucket,i)=>allOpenings?combineSources(combinedOpenings.map(line=>line.sources[i])):opening&&bucket.sources?.openings[openingKey(opening)])}/>}
-    <Comparison comparison={data.comparison} section={section} themes={allPatterns?data.patterns:theme?[theme]:[]} opening={section==='Openings'&&!allOpenings?opening:null}/>
+    {section==='Patterns'&&<button className="insight-action compact-practice" onClick={()=>onDrill(allPatterns?'all':theme?.name??'all')}>Practice {allPatterns?'these patterns':'this pattern'} � {allPatterns?data.practice?.total?.due??0:data.practice?.byTheme[theme?.name]?.due??0} due</button>}
   </div>;
-}
-
-function PracticeProgress({stats,name,onDrill}){
-  const {tracked=0,due=0,repeat=0,steady=0,cleanReviews=0,nextDue}=stats??{};
-  return <section className="insight-card practice-progress">
-    <h2>{name?'Practice progress':'Spaced practice'}</h2>
-    {tracked>0?<><dl>
-      <div><dt>Due now</dt><dd>{due}</dd></div>
-      <div><dt>Repeated misses</dt><dd>{repeat}</dd></div>
-      <div><dt>Two clean solves in a row</dt><dd>{steady}</dd></div>
-      <div><dt>Clean solves</dt><dd>{cleanReviews}</dd></div>
-    </dl><p>{tracked} positions tracked.{nextDue&&!due?` Next review ${new Date(nextDue).toLocaleString('en-GB',{dateStyle:'medium',timeStyle:'short'})}.`:''}</p></>
-    :<p>Practice a mistake to start tracking it here.</p>}
-    {onDrill&&<button className="insight-action" onClick={onDrill}>{due?'Review due positions':name?'Drill this mistake':'Practice mistakes'}</button>}
-  </section>;
-}
-
-function Comparison({comparison,section,themes,opening}){
-  if(!comparison||(section==='Openings'&&!opening)||(section==='Patterns'&&!themes.length))return null;
-  const {recent,previous}=comparison;
-  const measure=(count,total)=>total?100*count/total:null;
-  const rows=(section==='Overall'?phases:[]).map(name=>({
-    label:name,...Object.fromEntries([['recent',recent],['previous',previous]].map(([key,w])=>{
-      const phase=w.phases[name];return [key,phase?measure(phase.errors,phase.moves):null];
-    })),
-  }));
-  for(const theme of themes.slice(0,3)){
-    rows.push({label:theme.name,theme:theme.name,recent:measure(recent.themes[theme.name]||0,recent.moves),previous:measure(previous.themes[theme.name]||0,previous.moves)});
-  }
-  const key=opening&&JSON.stringify([opening.name,opening.color]);
-  const openingWindows=key&&[previous.openings[key],recent.openings[key]];
-  const sampleEnough=openingWindows&&openingWindows.every(w=>w&&w.games>=5);
-  const print=rate=>rate===null?'—':number.format(rate);
-  const windowDates=w=>w.first?labelDate(new Date(w.first*1000).toISOString().slice(0,10))+' to '+labelDate(new Date(w.last*1000).toISOString().slice(0,10)):'No reviewed games';
-  return <section className="insight-card windows-card">
-    <h2>Last 100 vs previous 100</h2>
-    <p>Reviewed games for the selected time control across all dates. Rates are pooled per 100 reviewed moves.</p>
-    {rows.length>0&&<table><thead><tr><th scope="col">Mistake rate</th><th scope="col">Previous<br/><small>{windowDates(previous)}<br/>{previous.games} games · {number.format(previous.moves)} moves</small></th><th scope="col">Latest<br/><small>{windowDates(recent)}<br/>{recent.games} games · {number.format(recent.moves)} moves</small></th></tr></thead>
-      <tbody>{rows.map(row=><tr key={row.label}><th scope="row">{row.label}</th><td>{print(row.previous)}</td><td>{print(row.recent)}</td></tr>)}</tbody>
-    </table>}
-    {(recent.games<100||previous.games<100)&&<p>Fewer than 200 reviewed games. Treat the comparison as provisional.</p>}
-    {opening&&<p><strong>{opening.name} as {opening.color==='w'?'White':'Black'}</strong> · {sampleEnough?
-      `Result score ${print(measure(openingWindows[0].score,openingWindows[0].games))}% → ${print(measure(openingWindows[1].score,openingWindows[1].games))}% and opening errors per 100 moves ${print(measure(openingWindows[0].errors,openingWindows[0].moves))} → ${print(measure(openingWindows[1].errors,openingWindows[1].moves))} (${openingWindows[0].games} → ${openingWindows[1].games} games).`:
-      `Not enough games in both windows (previous ${openingWindows[0]?.games||0}, latest ${openingWindows[1]?.games||0}; need five each).`}</p>}
-  </section>;
 }

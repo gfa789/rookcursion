@@ -1,6 +1,5 @@
-import DecisionInsights from './DecisionInsights.jsx';
-import CoachingInsights from './CoachingInsights.jsx';
-import React,{useEffect,useLayoutEffect,useRef,useState} from 'react';
+import InsightFocus from './InsightFocus.jsx';
+import React,{useEffect,useRef,useState} from 'react';
 import LoadingSkeleton from './LoadingSkeleton.jsx';
 import './insights.css';
 import StudyTrends from './StudyTrends.jsx';
@@ -21,6 +20,7 @@ function RatingChart({ratings,period,focus,onFocus,onReset,onPoint}){
   function seekRating(event){
     const bounds=event.currentTarget.getBoundingClientRect();
     setCursor(Math.max(0,Math.min(1,((event.clientX-bounds.left)*w/bounds.width-left)/(right-left))));
+    selectNearest(event);
 
   }
   const openPoint=(control,point)=>{if(first!==last)setCursor((point.ended-first)/(last-first));onPoint(control,point);};
@@ -49,7 +49,7 @@ export default function Insights({active=true,onOpenGame,onDrill}){
   const [data,setData]=useState(null),[error,setError]=useState(''),[reload,setReload]=useState(0);
   const [openingChoice,setOpeningChoice]=useState(null),[patternChoice,setPatternChoice]=useState(null);
   const [ratingFocus,setRatingFocus]=useState(null),[ratingPoint,setRatingPoint]=useState(null);
-  const content=useRef(null),sectionPositions=useRef(new Map());
+  const [overview,setOverview]=useState('Ratings');
   useEffect(()=>{
     if(!active)return;
     const controller=new AbortController();
@@ -70,9 +70,6 @@ export default function Insights({active=true,onOpenGame,onDrill}){
     const timer=setInterval(refresh,15000);
     return()=>{controller.abort();clearInterval(timer);};
   },[scope,range,active,reload]);
-  useLayoutEffect(()=>{
-    if(active&&content.current)content.current.scrollTop=sectionPositions.current.get(section)||0;
-  },[section,active]);
   const fresh=data?.scope===scope&&data?.period.key===range?data:null;
   const openings=fresh?.openings??[];
   const patterns=fresh?.patterns??[];
@@ -87,7 +84,6 @@ export default function Insights({active=true,onOpenGame,onDrill}){
     setter(value);setRatingPoint(null);setRatingFocus(null);setError('');
   }
   function chooseSection(next){
-    if(content.current)sectionPositions.current.set(section,content.current.scrollTop);
     setSection(next);
   }
   return <section className="insights-panel study-insights" aria-label="Chess insights dashboard">
@@ -103,40 +99,36 @@ export default function Insights({active=true,onOpenGame,onDrill}){
           {PERIODS.map(([key,label])=><option key={key} value={key}>{label}</option>)}
         </select></label>
       </div>
-      {section==='Openings'&&openings.length>0&&<div className="study-sidebar-picker" aria-label="Opening family">
-        <button aria-pressed={allOpenings} onClick={()=>setOpeningChoice('all')}>Compare all openings</button>
-        {openings.map(item=><button key={openingKey(item)} aria-pressed={!allOpenings&&item===opening} onClick={()=>setOpeningChoice(openingKey(item))}>
-          <strong>{item.name}</strong><small>{item.color==='w'?'White':'Black'} · {fmt(item.games)} games</small>
-        </button>)}
-      </div>}
-      {section==='Patterns'&&patterns.length>0&&<div className="study-sidebar-picker" aria-label="Mistake pattern">
-        <button aria-pressed={allPatterns} onClick={()=>setPatternChoice('all')}>Compare all patterns</button>
-        {patterns.map(item=><button key={item.name} aria-pressed={!allPatterns&&item===pattern} onClick={()=>setPatternChoice(item.name)}>
-          <strong>{item.name}</strong><small>{fresh.practice?.byTheme[item.name]?.due??0} due</small>
-        </button>)}
-      </div>}
+      <label className="insight-view-select">{section==='Overall'?'View':section==='Openings'?'Opening':'Pattern'}
+        <select value={section==='Overall'?overview:section==='Openings'?(allOpenings?'all':opening?openingKey(opening):'all'):(allPatterns?'all':pattern?.name??'all')}
+          onChange={e=>section==='Overall'?setOverview(e.target.value):section==='Openings'?setOpeningChoice(e.target.value):setPatternChoice(e.target.value)}>
+          {section==='Overall'?['Ratings','Recovery','Conversion','Move timing','Clock pressure','Opponents'].map(name=><option key={name}>{name}</option>):<>
+            <option value="all">{section==='Openings'?'Compare top six':'Compare all'}</option>
+            {(section==='Openings'?openings:patterns).map(item=><option key={section==='Openings'?openingKey(item):item.name} value={section==='Openings'?openingKey(item):item.name}>{item.name}{section==='Openings'?' � '+(item.color==='w'?'White':'Black'):''}</option>)}
+          </>}
+        </select>
+      </label>
     </aside>
-    <div className="study-insights-content" ref={content} onScroll={event=>sectionPositions.current.set(section,event.currentTarget.scrollTop)}>
+    <div className="study-insights-content">
       <header className="insights-heading"><h1>{section==='Overall'?'Study insights':section}</h1>{fresh&&<span>{fmt(fresh.total)} games</span>}</header>
       {error&&<div className="insight-error" role="alert">{error} <button className="insight-action" onClick={()=>setReload(n=>n+1)}>Retry</button></div>}
       {!fresh&&!error&&<LoadingSkeleton view="insights" label="Loading insights"/>}
       {fresh&&<>
-        {section==='Overall'&&<section className="study-ratings">
+        {section==='Overall'&&overview==='Ratings'&&<section className="study-ratings">
           <h2>Rating trajectory</h2>
           <RatingChart ratings={fresh.ratings} period={fresh.period} focus={ratingFocus}
             onFocus={control=>{setRatingFocus(ratingFocus===control?null:control);setRatingPoint(null);}}
             onReset={()=>chooseFilter(setRange,'all')} onPoint={(control,point)=>setRatingPoint({control,point})}/>
           {ratingSelection&&<div className="trend-examples rating-sources">
             <h3>{ratingSelection.control} · {fmt(ratingSelection.point.rating)} · {date(ratingSelection.point.ended)}</h3>
-            {[...(ratingSelection.point.games??[])].reverse().slice(0,3).map(game=><button key={game.id} onClick={()=>onOpenGame(game.id,-1)}>
+            {[...(ratingSelection.point.games??[])].reverse().slice(0,1).map(game=><button key={game.id} onClick={()=>onOpenGame(game.id,-1)}>
               vs {game.opponent} <span aria-hidden="true">↗</span>
             </button>)}
           </div>}
         </section>}
-        {section==='Overall'&&<CoachingInsights data={fresh.coaching} onOpenGame={onOpenGame}/>}
-        {section==='Overall'&&<DecisionInsights data={fresh.decisions} onOpenGame={onOpenGame}/>}
-        <StudyTrends key={`${scope}:${range}:${section}`} data={fresh} section={section} opening={opening}
-          pattern={pattern} allOpenings={allOpenings} allPatterns={allPatterns} onOpenGame={onOpenGame} onDrill={name=>onDrill(scope,name)}/>
+        {section==='Overall'&&overview!=='Ratings'&&<InsightFocus key={overview+scope+range} data={fresh} view={overview} onOpenGame={onOpenGame}/>}
+        {section!=='Overall'&&<StudyTrends key={`${scope}:${range}:${section}`} data={fresh} section={section} opening={opening}
+          pattern={pattern} allOpenings={allOpenings} allPatterns={allPatterns} onOpenGame={onOpenGame} onDrill={name=>onDrill(scope,name)}/>}
       </>}
     </div>
   </section>;
