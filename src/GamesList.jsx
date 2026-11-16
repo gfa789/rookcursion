@@ -29,11 +29,23 @@ export default function GamesList({games,selected,loading,onSelect,active,memory
   },[visibleLimit,games.length,active]);
   return <div className="game-cards game-scroll" ref={listRef} role="region" aria-label="Games list" tabIndex={0} onScroll={remember}>
     {loading&&<LoadingSkeleton view="games" label="Loading games"/>}
-    {games.slice(0,visibleLimit).map(g=><button key={g.id} data-game-id={g.id} className={`game-card ${selected===g.id?'active':''}`} onClick={()=>{remember();onSelect(g);}}>
-      <span className={`result ${g.result}`}>{g.result==='win'?'1':g.result==='loss'?'0':'½'}</span>
-      <span className="game-details"><strong>{g.opponent}</strong><small>{g.timeClass} · {timeControl(g.timeControl)} · {date(g.ended)}</small></span>
-      <span className="saved-quality">{g.accuracy?`${g.accuracy[g.color]}%`:'→'}</span>
-    </button>)}
+    {games.slice(0,visibleLimit).map(game=>{
+      const result={win:'Win',loss:'Loss',draw:'Draw'}[game.result];
+      const accuracy=game.accuracy?.[game.color];
+      return <button key={game.id} data-game-id={game.id} className={`game-card ${selected===game.id?'active':''}`}
+        aria-current={selected===game.id?'true':undefined} onClick={()=>{remember();onSelect(game);}}>
+        <span className="game-details"><strong>{game.opponent}</strong>
+          <small>{game.timeClass} <span aria-hidden="true">&middot;</span> {timeControl(game.timeControl)}</small>
+        </span>
+        <span className="game-outcome">
+          <span className={`game-result ${game.result}`}>{result}</span>
+          <span className="game-date">{date(game.ended)}</span>
+        </span>
+        {Number.isFinite(accuracy)&&<span className="saved-quality" aria-label={`Review accuracy ${accuracy}%`}>
+          {accuracy}%<small>Accuracy</small>
+        </span>}
+      </button>;
+    })}
     <div className="games-list-end" ref={endRef} role="status">{loading?'':!games.length?'No games found.':visibleLimit<games.length?'Loading more...':`${games.length.toLocaleString('en-GB')} games · all shown`}</div>
   </div>;
 }
