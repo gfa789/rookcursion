@@ -48,7 +48,7 @@ export default function GamesList({games,selected,loading,onSelect,active,memory
         {group.games.map(game=>{
           const accuracy=game.accuracy?.[game.color];
           return <button key={game.id} data-game-id={game.id} className={`game-card ${selected===game.id?'active':''}`}
-            aria-current={selected===game.id?'true':undefined} onClick={()=>{remember();onSelect(game);}}>
+            aria-current={selected===game.id?'true':undefined} onClick={event=>{remember();onSelect(game,event);}}>
             <span className="game-side" role="img" aria-label={game.color==='w'?'Played as White':'Played as Black'}>
               <ChessPiece type="k" color={game.color}/>
             </span>

@@ -59,18 +59,49 @@ function writeGamesView(filter,search,position){
   } catch {}
 }
 
+const tabs=['desk','games','review','puzzles','learn','insights'];
+const insightSections=['Ratings','Openings','Mistakes'];
+
+function readLocation(){
+  const query=new URLSearchParams(window.location.search);
+  const tab=query.get('tab');
+  const id=query.get('game');
+  const move=query.get('move');
+  return {
+    view:tabs.includes(tab)&& (tab!=='review'||id)?tab:'desk',
+    section:insightSections.find(name=>name.toLowerCase()===query.get('section'))??'Ratings',
+    id,
+    index:move&&/^-?\d+$/.test(move)&&Number.isSafeInteger(Number(move))?Math.max(-1,Number(move)):-1,
+    screen:query.get('screen')==='summary'?'summary':'review',
+  };
+}
+
+function writeLocation({view,section,id,index,screen},replace=false){
+  const url=new URL(window.location.href);
+  for(const key of ['tab','section','game','move','screen'])url.searchParams.delete(key);
+  if(view!=='desk')url.searchParams.set('tab',view);
+  if(view==='insights'&&section!=='Ratings')url.searchParams.set('section',section.toLowerCase());
+  if(view==='review'&&id){
+    url.searchParams.set('game',id);
+    if(index>=0)url.searchParams.set('move',index);
+    if(screen==='summary')url.searchParams.set('screen','summary');
+  }
+  if(url.href!==window.location.href)window.history[replace?'replaceState':'pushState'](null,'',url);
+}
+
 export default function Studio(){
-  const [status,setStatus]=useState(null),[games,setGames]=useState([]),[selected,setSelected]=useState(null),[game,setGame]=useState(null),[review,setReview]=useState(null),[job,setJob]=useState(null);
+  const [initialLocation]=useState(readLocation);
+  const [status,setStatus]=useState(null),[games,setGames]=useState([]),[selected,setSelected]=useState(initialLocation.view==='review'?initialLocation.id:null),[game,setGame]=useState(null),[review,setReview]=useState(null),[job,setJob]=useState(null);
   const [failedGame,setFailedGame]=useState(null);
   const [index,setIndex]=useState(-1),[flipped,setFlipped]=useState(false),[syncing,setSyncing]=useState(false),[loading,setLoading]=useState(true),[error,setError]=useState(''),[notice,setNotice]=useState('');
   const [savedGamesView]=useState(readGamesView);
-  const [filter,setFilter]=useState(savedGamesView.filter),[search,setSearch]=useState(savedGamesView.search),[depth,setDepth]=useState(15),[playing,setPlaying]=useState(false),[library,setLibrary]=useState(true),[screen,setScreen]=useState('summary');
-  const [view,setView]=useState('desk');
-  const [insightSection,setInsightSection]=useState('Ratings');
+  const [filter,setFilter]=useState(savedGamesView.filter),[search,setSearch]=useState(savedGamesView.search),[depth,setDepth]=useState(15),[playing,setPlaying]=useState(false),[library,setLibrary]=useState(initialLocation.view==='games'),[screen,setScreen]=useState('summary');
+  const [view,setView]=useState(initialLocation.view);
+  const [insightSection,setInsightSection]=useState(initialLocation.section);
   const [insightFilters,setInsightFilters]=useState(null);
   function selectInsightSection(section,event){
     if(section===insightSection)setInsightFilters({keyboard:event.detail===0});
-    else setInsightSection(section);
+    else {setInsightSection(section);writeLocation({view,section});}
   }
   const [insightsVisited,setInsightsVisited]=useState(false),[reviewReturn,setReviewReturn]=useState('games');
   useEffect(()=>{if(view==='insights')setInsightsVisited(true);},[view]);
@@ -81,14 +112,14 @@ export default function Studio(){
   useEffect(()=>{
     writeGamesView(filter,search,gameListMemory.current.get(listKey)??null);
   },[filter,search,listKey]);
-  const selectedRef=useRef(null),tableRef=useRef(null),pendingInsightRef=useRef(null),revisionRef=useRef(null);
+  const selectedRef=useRef(null),tableRef=useRef(null),pendingInsightRef=useRef(initialLocation.view==='review'?initialLocation:null),revisionRef=useRef(null);
   const [moveRows,setMoveRows]=useState(8);
   useEffect(()=>{const element=tableRef.current;if(!element)return;const observer=new ResizeObserver(entries=>{const height=entries[0].contentRect.height;if(height>0)setMoveRows(Math.max(1,Math.min(8,Math.floor(height/24))));});observer.observe(element);return()=>observer.disconnect();},[]);
   useEffect(()=>{selectedRef.current=selected;},[selected]);
   const loadGames=async()=>{const data=await api('games');setGames(data.games);return data.games;};
   async function syncGames(s=status){setSyncing(true);setError('');try{const result=await api('sync',{},s.token);const list=await loadGames();setStatus(old=>({...old,lastSync:result.lastSync}));setNotice(`Updated · ${list.length} games`);if(!selectedRef.current&&list.length)setSelected(list[0].id);}catch(e){setError(e.message);}finally{setSyncing(false);}}
-  useEffect(()=>{let alive=true;(async()=>{try{const s=await api('status');if(!alive)return;setStatus(s);const list=await loadGames();if(!alive)return;if(list.length)setSelected(list[0].id);else await syncGames(s);}catch(e){if(alive)setError(e.message);}finally{if(alive)setLoading(false);}})();return()=>{alive=false;};},[]);
-  useEffect(()=>{if(!selected)return;let alive=true;setFailedGame(null);setGame(null);setReview(null);setJob(null);setIndex(-1);setPlaying(false);setScreen('summary');api(`games/${selected}`).then(data=>{if(alive){setGame(data.game);setReview(data.review);setJob(data.job);setFlipped(data.game.color==='b');if(pendingInsightRef.current?.id===selected){setIndex(pendingInsightRef.current.index);setScreen(data.review||pendingInsightRef.current.index>=0?'review':'summary');pendingInsightRef.current=null;}}}).catch(e=>{if(alive){setFailedGame(selected);setError(e.message);}});return()=>{alive=false;};},[selected]);
+  useEffect(()=>{let alive=true;(async()=>{try{const s=await api('status');if(!alive)return;setStatus(s);const list=await loadGames();if(!alive)return;if(list.length)setSelected(current=>current??list[0].id);else await syncGames(s);}catch(e){if(alive)setError(e.message);}finally{if(alive)setLoading(false);}})();return()=>{alive=false;};},[]);
+  useEffect(()=>{if(!selected)return;let alive=true;setFailedGame(null);setGame(null);setReview(null);setJob(null);setIndex(-1);setPlaying(false);setScreen('summary');api(`games/${selected}`).then(data=>{if(alive){setGame(data.game);setReview(data.review);setJob(data.job);setFlipped(data.game.color==='b');if(pendingInsightRef.current?.id===selected){setIndex(pendingInsightRef.current.index);setScreen(pendingInsightRef.current.screen??(data.review||pendingInsightRef.current.index>=0?'review':'summary'));pendingInsightRef.current=null;}}}).catch(e=>{if(alive){setFailedGame(selected);setError(e.message);}});return()=>{alive=false;};},[selected]);
   useEffect(()=>{if(!['queued','running'].includes(job?.status)||!selected)return;let alive=true,busy=false;const poll=async()=>{if(busy||!alive)return;busy=true;try{await refreshAnalysis({readJob:()=>api(`jobs/${selected}`),readGame:()=>api(`games/${selected}`),isActive:()=>alive,onProgress:setJob,onError:setError,onComplete:(savedReview,finishedJob)=>{setReview(savedReview);setJob(finishedJob);setError('');setNotice('Review saved');loadGames().catch(e=>setError(e.message));}});}catch(e){if(alive)setError(e.message);}finally{busy=false;}};const timer=setInterval(poll,1200);poll();return()=>{alive=false;clearInterval(timer);};},[selected,job?.status]);
   useEffect(()=>{let alive=true,busy=false;const refresh=async()=>{if(busy||!alive)return;busy=true;try{const next=await api('status');if(!alive)return;setStatus(next);if(next.background?.revision!==revisionRef.current){revisionRef.current=next.background?.revision;await loadGames();const id=selectedRef.current;if(id){const data=await api(`games/${id}`);if(alive&&selectedRef.current===id){setReview(old=>old?.createdAt===data.review?.createdAt&&old?.bookVersion===data.review?.bookVersion?old:data.review);setJob(data.job);}}}}catch(e){if(alive)setError(e.message);}finally{busy=false;}};const timer=setInterval(refresh,15000);const focus=()=>{if(document.visibilityState==='visible')refresh();};document.addEventListener('visibilitychange',focus);return()=>{alive=false;clearInterval(timer);document.removeEventListener('visibilitychange',focus);};},[]);
   useEffect(()=>{if(!notice)return;const timer=setTimeout(()=>setNotice(''),4000);return()=>clearTimeout(timer);},[notice]);
@@ -150,13 +181,50 @@ export default function Studio(){
   function enter(n=index<0?0:index){go(n);setScreen('review');}
   function findGrade(g){const rows=review.rows.filter(r=>r.color===game.color&&r.classification===g);enter((rows.find(r=>r.index>index)||rows[0]).index);}
   async function analyze(){setError('');try{setJob(await api(`games/${game.id}/analyze`,{depth},status.token));}catch(e){setError(e.message);}}
-  function openInsight(id,targetIndex=0,returnTo='games'){setReviewReturn(returnTo);setView('review');setLibrary(false);if(id===selected){go(targetIndex);setScreen(review||targetIndex>=0?'review':'summary');}else{pendingInsightRef.current={id,index:targetIndex};setSelected(id);}}
+  useEffect(()=>{
+    function restoreLocation(){
+      const next=readLocation();
+      setView(next.view);
+      setLibrary(next.view==='games');
+      setInsightSection(next.section);
+      setInsightFilters(null);
+      setPlaying(false);
+      if(next.view==='review'){
+        setReviewReturn('games');
+        if(next.id===game?.id){
+          go(next.index);
+          setScreen(next.screen);
+        }else{
+          pendingInsightRef.current=next;
+          setSelected(next.id);
+        }
+      }
+    }
+    window.addEventListener('popstate',restoreLocation);
+    return ()=>window.removeEventListener('popstate',restoreLocation);
+  },[game,go]);
+  useEffect(()=>{
+    const location=readLocation();
+    if(view==='review'&&game?.id===selected&&location.view===view&&location.id===selected){
+      writeLocation({view,id:selected,index:Math.min(index,total-1),screen},true);
+      if(index>=total)setIndex(total-1);
+    }
+  },[view,game,selected,index,screen,total]);
+  function openInsight(id,targetIndex=0,returnTo='games'){
+    writeLocation({view:'review',id,index:targetIndex});
+    setReviewReturn(returnTo);
+    setView('review');
+    setLibrary(false);
+    if(id===selected){go(targetIndex);setScreen(review||targetIndex>=0?'review':'summary');}
+    else{pendingInsightRef.current={id,index:targetIndex};setSelected(id);}
+  }
   const [drill,setDrill]=useState(null);
   function openDrill(scope,theme){
     setDrill(previous=>({scope,theme,sequence:(previous?.sequence??0)+1}));
     navigate('puzzles');
   }
   function navigate(nextView){
+    writeLocation({view:nextView,section:insightSection});
     setPlaying(false);
     setLibrary(nextView==='games');
     setView(nextView);
@@ -185,20 +253,41 @@ export default function Studio(){
     return ()=>{active=false;};
   },[view,latestId,deskPosition?.id,selected]);
   const featuredMove=loadedLatestMove??(deskPosition?.id===latestId?deskPosition?.move:null);
+  const boardColumnRef=useRef(null);
+  const animatedGame=useRef(null);
+  useEffect(()=>{
+    if(view!=='review'||!game||game.id!==selected||animatedGame.current!==game.id)return;
+    animatedGame.current=null;
+    if(!window.matchMedia('(min-width:901px) and (prefers-reduced-motion:no-preference)').matches)return;
+    const animation=boardColumnRef.current?.animate(
+      [{opacity:.55,transform:'translateX(5px)'},{opacity:1,transform:'translateX(0)'}],
+      {duration:180,easing:'cubic-bezier(.23,1,.32,1)'}
+    );
+    return ()=>animation?.cancel();
+  },[view,game,selected]);
+  function selectLibraryGame(next,event){
+    writeLocation({view:'review',id:next.id,screen:'summary'});
+    animatedGame.current=event.detail>0&&next.id!==selected?next.id:null;
+    setReviewReturn('games');
+    setSelected(next.id);
+    setView('review');
+    setScreen('summary');
+    setLibrary(false);
+  }
   const coachProps={row:current,review,index};
-  return <div className={`studio screen-${screen} view-${view} ${view==='review'?'review-active':''}`}><a className="skip-workspace" href={view==='games'?'#game-library':'#workspace'}>Skip to workspace</a><aside id="game-library" tabIndex={-1} hidden={view!=='games'} className={`library ${library?'open':''}`} aria-label="Game library"><header className="library-title games-heading">
+  return <div className={`studio screen-${screen} view-${view} ${view==='review'?'review-active':''}`}><a className="skip-workspace" href={view==='games'?'#game-library':'#workspace'}>Skip to workspace</a><aside id="game-library" tabIndex={-1} hidden={view!=='games'&&view!=='review'} className={`library ${library?'open':''}`} aria-label="Game library"><header className="library-title games-heading">
       <h1>Games</h1>
       <button className="sync-button" disabled={syncing||!status} onClick={()=>syncGames()} aria-label={syncing?'Syncing games':'Sync latest games'} title="Sync latest games"><Icon name="refresh"/></button>
     </header>
     <input className="search" aria-label="Search opponents" placeholder="Find an opponent…" value={search} onChange={e=>{setSearch(e.target.value);}}/><div className="filters" aria-label="Game time control">{gameFilters.map(f=><button key={f} aria-pressed={filter===f} className={filter===f?'active':''} onClick={()=>{setFilter(f);}}>{f==='all'?'All games':f}</button>)}</div>
-    <GamesList key={listKey} listKey={listKey} onRemember={position=>writeGamesView(filter,search,position)} memory={gameListMemory} active={view==='games'} games={filtered} selected={selected} loading={loading} timeControl={timeControl} onSelect={g=>{setReviewReturn('games');setSelected(g.id);setView('review');setScreen('summary');setLibrary(false);}}/></aside>
+    <GamesList key={listKey} listKey={listKey} onRemember={position=>writeGamesView(filter,search,position)} memory={gameListMemory} active={view==='games'} games={filtered} selected={selected} loading={loading} timeControl={timeControl} onSelect={selectLibraryGame}/></aside>
     <main id="workspace" tabIndex={-1} className={`main ${view!=="review"?`${view}-mode`:""}`}><div className="game-toolbar" hidden={!["games","review"].includes(view)}>{view==='games'&&game&&<button className="preview-review" onClick={()=>openInsight(game.id,index)}>Review selected game</button>}<button className="icon-button" aria-label="Flip board" onClick={()=>setFlipped(f=>!f)}><Icon name="flip"/></button><span className={`result-label ${game?.result}`}>{game?.result}</span><button className="phone-button summary-link" onClick={()=>screen==='summary'?enter():setScreen('summary')}>{screen==='summary'?'Board':'Summary'}<Icon name="right" size={14}/></button>{game&&<a className="icon-button download" href={`api/games/${game.id}/pgn`} aria-label="Download game PGN" title="Download PGN"><Icon name="download"/></a>}</div>
     {error&&<div className="toast error" role="alert">{error}<button aria-label="Dismiss error" onClick={()=>setError('')}>×</button></div>}{notice&&<div className="toast" role="status">{notice}</div>}
     {view==='desk'&&<StudyDesk game={latestGame} move={featuredMove} total={games.length} loading={loading}
       onReview={()=>openInsight(latestGame.id,0,'desk')} onPractice={()=>navigate('puzzles')}/>}
     {practiceViews.map(practiceView=><div key={practiceView} className="practice-view" hidden={view!==practiceView} inert={view!==practiceView}><Puzzles key={practiceView==='puzzles'?drill?.sequence:undefined} initialScope={practiceView==='puzzles'?drill?.scope:undefined} initialTheme={practiceView==='puzzles'?drill?.theme:undefined} active={view===practiceView} mode={practiceView==="learn"?"learn":"puzzles"} token={status?.token} onOpenGame={(id,moveIndex)=>openInsight(id,moveIndex,practiceView)}/></div>)}
     {insightsVisited&&<div className="practice-view" hidden={view!=="insights"} inert={view!=="insights"}><Insights section={insightSection} onDrill={openDrill} active={view==="insights"} filters={insightFilters} onCloseFilters={()=>setInsightFilters(null)}/></div>}{["games","review"].includes(view)&&(loading||selected&&selected!==game?.id&&failedGame!==selected)&&<LoadingSkeleton view="review" label="Loading game review"/>}
-    <div className="review-workspace" hidden={!["games","review"].includes(view)||loading||!!selected&&selected!==game?.id}><section className="board-column" aria-label="Game board"><Coach {...(variationMove?{variationMove}:coachProps)} compact/><Player player={game?.[topColor==='w'?'white':'black']} color={topColor} isYou={game?.color===topColor}/><div className="board-frame"><div className="board-and-eval">
+    <div className="review-workspace" hidden={!["games","review"].includes(view)||loading||!!selected&&selected!==game?.id}><section ref={boardColumnRef} className="board-column" aria-label="Game board"><Coach {...(variationMove?{variationMove}:coachProps)} compact/><Player player={game?.[topColor==='w'?'white':'black']} color={topColor} isYou={game?.color===topColor}/><div className="board-frame"><div className="board-and-eval">
         <div className={`eval-bar ${flipped?'flipped':''}`} aria-label={variationMove?'Evaluation unavailable for the variation':`Evaluation ${score(current)} from White�s perspective`}><div style={{height:`${!variationMove&&current?.whiteCp!==undefined?Math.max(3,Math.min(97,50+current.whiteCp/15)):50}%`}}/></div>
         <div className="interactive-board">
           <Board fen={fen} flipped={flipped} played={played} best={best} grade={grade} selected={reviewSquare} targets={reviewTargets} onSquare={boardInteractive?chooseReviewSquare:undefined} onDrop={boardInteractive&&!promotion?exploreMove:undefined}/>
@@ -210,6 +299,6 @@ export default function Studio(){
         <button type="button" onClick={resetBoard}>Return to game</button>
       </div>:<MoveCarousel moves={moves} index={index} onMove={go}/>}<button className="icon-button next" aria-label="Next move" disabled={index>=total-1} onClick={()=>go(index+1)}><Icon name="right"/></button><button className="icon-button desktop-control" aria-label="Last move" disabled={index>=total-1} onClick={()=>go(total-1)}><Icon name="last"/></button><span className="move-counter">{index+1} / {total}</span></nav>
     </section><aside className="review-panel" aria-label="Game analysis"><Summary index={index} onMove={go} game={game} review={review} job={job} depth={depth} setDepth={setDepth} onAnalyze={analyze} onGrade={findGrade} onEnter={()=>enter()}/><Coach {...(variationMove?{variationMove}:coachProps)}/><section className="desktop-moves" aria-label="Move list"><div className="move-list-title"><span>MOVE BY MOVE</span><span>{total?`${Math.ceil(total/2)} moves`:'—'}</span></div><div className="move-table" ref={tableRef} style={{"--move-rows":moveRows}}>{Array.from({length:moveRows},(_,n)=>{const pair=pageMoves.slice(n*2,n*2+2);return <div className="move-row" key={n}><span>{pair.length?movePage*moveRows+n+1+'.':''}</span>{[0,1].map(c=>pair[c]?<button key={c} aria-current={pair[c].index===index?'step':undefined} onClick={()=>go(pair[c].index)}><span>{pair[c].san}</span><b className={pair[c].classification?.toLowerCase()}>{MARKS[pair[c].classification]}</b></button>:<span key={c}/>)}</div>;})}</div><div className="move-pages"><button className="icon-button" aria-label="Previous move page" disabled={movePage===0} onClick={()=>go(movePage*pageSize-pageSize)}><Icon name="left" size={15}/></button><span>{movePage+1} / {Math.max(1,Math.ceil(total/pageSize))}</span><button className="icon-button" aria-label="Next move page" disabled={(movePage+1)*pageSize>=total} onClick={()=>go((movePage+1)*pageSize)}><Icon name="right" size={15}/></button></div></section><div className="method-note">Grades are local estimates · Brilliant uses a sacrifice heuristic.</div></aside></div></main>
-    <Navigation view={view} insightSection={insightSection} onInsightSection={selectInsightSection} onBack={()=>{setLibrary(reviewReturn==='games');setView(reviewReturn);}} onFlip={()=>setFlipped(f=>!f)} onNavigate={navigate}/>
+    <Navigation view={view} insightSection={insightSection} onInsightSection={selectInsightSection} onBack={()=>navigate(reviewReturn)} onFlip={()=>setFlipped(f=>!f)} onNavigate={navigate}/>
   </div>;
 }

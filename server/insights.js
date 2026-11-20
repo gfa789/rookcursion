@@ -1,3 +1,4 @@
+import {buildStudyReport} from './study-report.js';
 import {decisionFact,decisionInsights} from './decisions.js';
 import {coachingFact,coachingInsights} from './coaching.js';
 import {Chess} from 'chess.js';
@@ -142,6 +143,7 @@ function studyTrends(facts,openings,granularity){
 export function aggregateInsights(allFacts,scope='all',options={}){
   const period=insightPeriod(options.range,options.now??Date.now());
   const facts=allFacts.filter(f=>(scope==='all'||f.timeClass===scope)&&(period.start===null||f.ended>=period.start)&&f.ended<=period.end).sort((a,b)=>a.ended-b.ended);
+  if(options.studyReport)return {scope,period,...buildStudyReport(facts)};
   const reviewed=facts.filter(f=>f.reviewed),counts={win:0,loss:0,draw:0},grades={},phases={},themes={},openingMap=new Map();
   const colours={w:{games:0,win:0,loss:0,draw:0},b:{games:0,win:0,loss:0,draw:0}};
   let ownMoves=0;
